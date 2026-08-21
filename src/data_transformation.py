@@ -12,7 +12,23 @@ def transform_data_and_kpi(df: pd.DataFrame) -> pd.DataFrame:
     df_transformed = df.copy()
 
     # =========================================================================
-    # 1. Pemisahan Category Name Bertingkat (Sesuai Manual Book & Poin 1)
+    # TRANSFORMASI NAMA: Mengambil 2 Kata Pertama (created_by_name & updated_by_name)
+    # =========================================================================
+    def shorten_to_two_words(name):
+        if pd.isna(name) or not str(name).strip():
+            return name
+        words = str(name).strip().split()
+        return " ".join(words[:2])
+
+    name_cols = ['created_by_name', 'updated_by_name']
+    for col in name_cols:
+        if col in df_transformed.columns:
+            df_transformed[col] = df_transformed[col].apply(shorten_to_two_words)
+
+    # (BEKAS RETURN PREMATUR SUDAH DIHAPUS DI SINI)
+
+    # =========================================================================
+    # 1. Pemisahan Category Name Bertingkat
     #    Mendukung delimiter ' - ' maupun ' > '
     # =========================================================================
     if 'category_name' in df_transformed.columns:
@@ -36,10 +52,7 @@ def transform_data_and_kpi(df: pd.DataFrame) -> pd.DataFrame:
             df_transformed[col] = pd.to_datetime(df_transformed[col], errors='coerce')
 
     # =========================================================================
-    # 3. Hitung MTTR Pending & MTTR Non-Pending (Poin 3)
-    #    - MTTR Pending     : date_last_update - date_pending
-    #    - MTTR Non-Pending : date_last_update - date_assigned
-    #    - Pending Status   : 'Pending' jika date_pending terisi, else 'Non-Pending'
+    # 3. Hitung MTTR Pending & MTTR Non-Pending
     # =========================================================================
     # MTTR Pending (menit)
     if 'date_last_update' in df_transformed.columns and 'date_pending' in df_transformed.columns:
@@ -57,7 +70,7 @@ def transform_data_and_kpi(df: pd.DataFrame) -> pd.DataFrame:
     else:
         df_transformed['mttr_non_pending_minutes'] = 0.0
 
-    # Total MTTR Minutes untuk perhitungan SLA (Kombinasi Pending / Non-Pending)
+    # Total MTTR Minutes untuk perhitungan SLA
     def calculate_mttr(row):
         if pd.notnull(row.get('date_pending')) and pd.notnull(row.get('date_assigned')):
             val = (row['date_pending'] - row['date_assigned']).total_seconds() / 60
@@ -78,8 +91,7 @@ def transform_data_and_kpi(df: pd.DataFrame) -> pd.DataFrame:
         df_transformed['pending_status'] = 'Non-Pending'
 
     # =========================================================================
-    # 4. Hitung Response Time (Menit) - (Poin 4)
-    #    Response Time = date_assigned - date_start_interaction
+    # 4. Hitung Response Time (Menit)
     # =========================================================================
     if 'date_assigned' in df_transformed.columns and 'date_start_interaction' in df_transformed.columns:
         df_transformed['response_time_minutes'] = (
@@ -97,10 +109,11 @@ def transform_data_and_kpi(df: pd.DataFrame) -> pd.DataFrame:
             lambda row: 'Comply' if row['mttr_minutes'] <= row.get('sla_minute', 0) else 'Breach', 
             axis=1
         )
+    else:
+        df_transformed['sla_status'] = 'UNDETERMINED'
 
     # =========================================================================
-    # 6. Resolution Time Grouping (Poin 5)
-    #    Resolution Time = date_last_update - date_created_at
+    # 6. Resolution Time Grouping
     # =========================================================================
     if 'date_created_at' in df_transformed.columns and 'date_last_update' in df_transformed.columns:
         df_transformed['resolution_time_minutes'] = (
@@ -124,15 +137,16 @@ def transform_data_and_kpi(df: pd.DataFrame) -> pd.DataFrame:
         df_transformed['resolution_time_group'] = df_transformed['resolution_time_minutes'].apply(group_resolution_time)
 
     # =========================================================================
-    # 7. Pengelompokan Network Component Rule-Based (Poin 6 DAX Switch)
+    # 7. Pengelompokan Network Component Rule-Based
     # =========================================================================
     df_transformed['network_component'] = classify_network_component(df_transformed)
 
     # =========================================================================
-    # 8. Pengelompokan Ticket Type (Poin 2 - Gangguan vs Request)
+    # 8. Pengelompokan Ticket Type (Gangguan vs Request)
     # =========================================================================
     df_transformed['ticket_type'] = classify_ticket_type_initial(df_transformed)
 
+    # RETURN RESMI BERADA DI BAGIAN AKHIR
     return df_transformed
 
 

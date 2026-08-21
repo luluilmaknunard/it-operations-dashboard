@@ -1,8 +1,30 @@
 import os
 import json
 import pandas as pd
+import streamlit as st
 from google import genai
 from google.genai import types
+
+def get_gemini_api_key(api_key: str = None) -> str:
+    """
+    Mengambil API key dengan urutan prioritas:
+    1. Parameter fungsi `api_key`
+    2. Streamlit secrets (`st.secrets["GEMINI_API_KEY"]`)
+    3. Environment variable (`GEMINI_API_KEY`)
+    """
+    if api_key:
+        return api_key
+
+    # Cek dari Streamlit Secrets (.streamlit/secrets.toml)
+    try:
+        if "GEMINI_API_KEY" in st.secrets:
+            return st.secrets["GEMINI_API_KEY"]
+    except Exception:
+        pass
+
+    # Fallback ke Environment Variable
+    return os.environ.get("GEMINI_API_KEY")
+
 
 def refine_freetext_with_gemini(df: pd.DataFrame, api_key: str = None) -> pd.DataFrame:
     """
@@ -12,13 +34,30 @@ def refine_freetext_with_gemini(df: pd.DataFrame, api_key: str = None) -> pd.Dat
     if df is None or df.empty:
         return df
 
-    # Ambil API key dari parameter atau environment variable
-    key = api_key or os.environ.get("GEMINI_API_KEY")
+    df_ai = df.copy()
+
+    # Buat kolom jika belum ada
+    if 'network_component' not in df_ai.columns:
+        df_ai['network_component'] = 'Network Lainnya'
+    if 'ticket_type' not in df_ai.columns:
+        df_ai['ticket_type'] = 'Gangguan'
+
+    # Filter baris yang terindikasi butuh klasifikasi AI
+    mask_ai = df_ai['network_component'] == 'Network Lainnya'
+    indices_to_process = df_ai[mask_ai].index
+
+    # Ambil API key secara aman
+    key = get_gemini_api_key(api_key)
     if not key:
-        print("API Key Gemini tidak ditemukan. Menggunakan klasifikasi rule-based.")
+        print("API Key Gemini tidak ditemukan. Menggunakan klasifikasi rule-based bawaan.")
         return df
 
-    client = genai.Client(api_key=key)
+    try:
+        client = genai.Client(api_key=key)
+    except Exception as e:
+        print(f"Gagal menginisialisasi Gemini Client: {e}")
+        return df
+
     df_ai = df.copy()
 
     # Filter baris yang terindikasi butuh klasifikasi AI (contoh: yang masuk 'Network Lainnya')

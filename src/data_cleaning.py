@@ -15,7 +15,7 @@ def clean_sensitive_data(df: pd.DataFrame) -> pd.DataFrame:
         cleaned = re.split(r'\s*[-/]\s*|\s*\(', cleaned)[0].strip()
         return cleaned if cleaned else 'Layanan Tidak Diketahui'
 
-    # 1. Cleaning Service Name (Menghapus tulisan SEGMENT agar menyatu kyk Foto 2)
+    # 1. Cleaning Service Name (Menghapus tulisan SEGMENT agar menyatu)
     if 'service_name' in df_clean.columns:
         df_clean['service_name'] = df_clean['service_name'].apply(clean_segment_name)
 
