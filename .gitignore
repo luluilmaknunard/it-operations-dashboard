@@ -1,0 +1,99 @@
+# ==========================================
+# 1. RAHASIA & API KEYS (SANGAT PENTING!)
+# ==========================================
+# Menyembunyikan secrets/API keys Streamlit
+.streamlit/secrets.toml
+.streamlit/secrets*.toml
+
+# File Environment Variable lainnya
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.p12
+
+# ==========================================
+# 2. FILE DATA SENSITIF & CHUNK DATA
+# ==========================================
+# Sembunyikan file data lokal (Excel, CSV, Parquet) agar data tidak bocor
+*.csv
+*.xlsx
+*.xls
+*.parquet
+*.json
+*.sqlite
+*.db
+
+# Terpenuhi jika kamu punya folder khusus data (opsional, mengabaikan isi folder data)
+data/
+datasets/
+temp/
+
+# ==========================================
+# 3. PYTHON CACHE & SYSTEM FILES
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# ==========================================
+# 4. VIRTUAL ENVIRONMENT (ENV LOCAL)
+# ==========================================
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# ==========================================
+# 5. IDE & EDITOR CONFIGURATION
+# ==========================================
+# VS Code
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+*.code-workspace
+
+# PyCharm / JetBrains
+.idea/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# ==========================================
+# 6. OPERATING SYSTEM TEMP FILES
+# ==========================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthru.db
+Desktop.ini
+$RECYCLE.BIN/

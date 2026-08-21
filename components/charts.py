@@ -71,19 +71,44 @@ def chart_tingkat_dampak_pie(df):
         return fig
     return None
 
+import plotly.express as px
+
 def chart_layanan_treemap(df):
-    """Treemap Chart: Layanan Terbanyak"""
-    if 'service_name' in df.columns:
-        counts = df['service_name'].value_counts().reset_index().head(10)
-        fig = px.treemap(
-            counts, path=['service_name'], values='count', color='count',
-            color_continuous_scale=RED_SEQUENCE,
-            title="<b>Layanan dengan Laporan Gangguan Terbanyak</b>"
-        )
-        fig.update_layout(height=320, margin=dict(l=10, r=10, t=40, b=10))
-        fig.update_coloraxes(showscale=False)
-        return fig
-    return None
+    """Membentuk Treemap Layanan Terbanyak dengan penanganan tipe data campur (str & int)."""
+    if df is None or df.empty or 'service_name' not in df.columns:
+        return None
+
+    # 1. Buat copy DataFrame agar aman
+    df_clean = df.copy()
+
+    # 2. PERBAIKAN: Paksa semua data service_name menjadi String dan hapus nilai kosong (NaN)
+    df_clean['service_name'] = df_clean['service_name'].astype(str).str.strip()
+    df_clean = df_clean[~df_clean['service_name'].isin(['nan', 'None', '', 'null'])]
+
+    if df_clean.empty:
+        return None
+
+    # 3. Hitung jumlah kemunculan per layanan
+    counts = df_clean['service_name'].value_counts().reset_index()
+    counts.columns = ['service_name', 'count']
+
+    # 4. Render Plotly Treemap
+    fig = px.treemap(
+        counts, 
+        path=['service_name'], 
+        values='count', 
+        color='count',
+        color_continuous_scale=['#FFE5E5', '#FF4D4D', '#B30000'],
+        title="<b>Layanan dengan Laporan Gangguan Terbanyak</b>"
+    )
+    
+    fig.update_layout(
+        margin=dict(t=40, l=10, r=10, b=10),
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)'
+    )
+
+    return fig
 
 def chart_subkategori_bar(df, title_name):
     """Horizontal Bar Chart: Break down Subkategori (Device, Network, dll)"""
