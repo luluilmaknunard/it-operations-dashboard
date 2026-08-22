@@ -8,27 +8,25 @@ BLUE_COLOR = "#1976D2"
 ORANGE_COLOR = "#F57C00"
 GREEN_COLOR = "#388E3C"
 RED_SEQUENCE = [
-    "#B71C1C",
-    "#C62828",
-    "#D32F2F",
-    "#E53935",
-    "#EF5350",
-    "#E57373",
+    "#B71C1C", "#C62828", "#D32F2F", "#E53935", "#EF5350", "#E57373"
 ]
 
 
 def chart_distribusi_jenis(df):
     """Donut Chart: Distribusi Jenis Tiket"""
-    col = (
-        "ticket_type"
-        if "ticket_type" in df.columns
-        else "category_split_1"
-    )
-    if col in df.columns:
+    if df is None or df.empty:
+        return None
+
+    # Tentukan kolom mana yang dipakai
+    col = "ticket_type" if "ticket_type" in df.columns else ("category_split_1" if "category_split_1" in df.columns else None)
+    
+    if col and col in df.columns:
         counts = df[col].value_counts().reset_index()
+        counts.columns = [col, "Jumlah"]  # Standarisasi nama kolom
+        
         fig = px.pie(
             counts,
-            values="count",
+            values="Jumlah",
             names=col,
             hole=0.6,
             color_discrete_sequence=[ORANGE_COLOR, BLUE_COLOR],
@@ -49,7 +47,6 @@ def chart_trend_harian_multi(df):
     if df is not None and "date_created_at" in df.columns:
         df_copy = df.copy()
 
-        # PERBAIKAN: Gunakan format='mixed' dan dayfirst=True agar aman untuk format "13.04.2026"
         df_copy["date_created_at_dt"] = pd.to_datetime(
             df_copy["date_created_at"],
             format="mixed",
@@ -57,7 +54,6 @@ def chart_trend_harian_multi(df):
             errors="coerce",
         )
 
-        # Ambil tanggal (day) dari data yang berhasil dikonversi
         df_copy["day"] = df_copy["date_created_at_dt"].dt.day
         df_filtered_date = df_copy.dropna(subset=["day"])
 
@@ -94,18 +90,22 @@ def chart_trend_harian_multi(df):
 
 def chart_kategori_horizontal(df):
     """Horizontal Bar Chart: Jumlah Gangguan per Kategori"""
+    if df is None or df.empty:
+        return None
+
     cat_col = (
         "category_split_1"
         if "category_split_1" in df.columns
-        else "category_name"
+        else ("category_name" if "category_name" in df.columns else None)
     )
-    if cat_col in df.columns:
+    if cat_col and cat_col in df.columns:
         counts = df[cat_col].value_counts().reset_index().head(5)
-        counts = counts.sort_values(by="count", ascending=True)
+        counts.columns = [cat_col, "Jumlah"]
+        counts = counts.sort_values(by="Jumlah", ascending=True)
 
         fig = px.bar(
             counts,
-            x="count",
+            x="Jumlah",
             y=cat_col,
             orientation="h",
             title="<b>Jumlah Gangguan per Kategori</b>",
@@ -124,11 +124,15 @@ def chart_kategori_horizontal(df):
 
 def chart_tingkat_dampak_pie(df):
     """Pie Chart: Distribusi Tingkat Dampak"""
+    if df is None or df.empty:
+        return None
+
     if "impact_name" in df.columns:
         counts = df["impact_name"].value_counts().reset_index()
+        counts.columns = ["impact_name", "Jumlah"]
         fig = px.pie(
             counts,
-            values="count",
+            values="Jumlah",
             names="impact_name",
             color_discrete_sequence=[GREEN_COLOR, "#FBC02D", RED_COLOR],
             title="<b>Distribusi Tingkat Dampak</b>",
@@ -144,19 +148,13 @@ def chart_tingkat_dampak_pie(df):
 
 
 def chart_layanan_treemap(df):
-    """Membentuk Treemap Layanan Terbanyak dengan penanganan tipe data campur (str & int)."""
+    """Membentuk Treemap Layanan Terbanyak"""
     if df is None or df.empty or "service_name" not in df.columns:
         return None
 
     df_clean = df.copy()
-
-    # Paksa semua data service_name menjadi String dan hapus nilai kosong (NaN)
-    df_clean["service_name"] = (
-        df_clean["service_name"].astype(str).str.strip()
-    )
-    df_clean = df_clean[
-        ~df_clean["service_name"].isin(["nan", "None", "", "null"])
-    ]
+    df_clean["service_name"] = df_clean["service_name"].astype(str).str.strip()
+    df_clean = df_clean[~df_clean["service_name"].isin(["nan", "None", "", "null"])]
 
     if df_clean.empty:
         return None
@@ -172,29 +170,32 @@ def chart_layanan_treemap(df):
         color_continuous_scale=["#FFE5E5", "#FF4D4D", "#B30000"],
         title="<b>Layanan dengan Laporan Gangguan Terbanyak</b>",
     )
-
     fig.update_layout(
         margin=dict(t=40, l=10, r=10, b=10),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
     )
-
     return fig
 
 
 def chart_subkategori_bar(df, title_name):
-    """Horizontal Bar Chart: Break down Subkategori (Device, Network, dll)"""
+    """Horizontal Bar Chart: Break down Subkategori"""
+    if df is None or df.empty:
+        return None
+
     cat_col = (
         "category_split_2"
         if "category_split_2" in df.columns
-        else "category_name"
+        else ("category_name" if "category_name" in df.columns else None)
     )
-    if cat_col in df.columns:
+    if cat_col and cat_col in df.columns:
         counts = df[cat_col].value_counts().reset_index().head(5)
-        counts = counts.sort_values(by="count", ascending=True)
+        counts.columns = [cat_col, "Jumlah"]
+        counts = counts.sort_values(by="Jumlah", ascending=True)
+
         fig = px.bar(
             counts,
-            x="count",
+            x="Jumlah",
             y=cat_col,
             orientation="h",
             title=f"<b>{title_name}</b>",
@@ -235,6 +236,9 @@ def chart_kalender_heatmap(df):
 
 def chart_peringkat_penyelesaian(df):
     """Bar Chart Peringkat Teknisi/Anggota"""
+    if df is None or df.empty:
+        return None
+
     col = (
         "created_by_name"
         if "created_by_name" in df.columns
@@ -242,10 +246,12 @@ def chart_peringkat_penyelesaian(df):
     )
     if col and col in df.columns:
         counts = df[col].value_counts().reset_index().head(10)
-        counts = counts.sort_values(by="count", ascending=True)
+        counts.columns = [col, "Jumlah"]
+        counts = counts.sort_values(by="Jumlah", ascending=True)
+
         fig = px.bar(
             counts,
-            x="count",
+            x="Jumlah",
             y=col,
             orientation="h",
             title="<b>Peringkat Pembuat/Penyelesai Tiket Terbanyak</b>",
@@ -263,12 +269,14 @@ def chart_peringkat_penyelesaian(df):
 
 
 def chart_waktu_penyelesaian(df):
-    """Bar Chart Distribusi Waktu Penyelesaian Tiket (Dinamis dari Data)"""
+    """Bar Chart Distribusi Waktu Penyelesaian Tiket"""
+    if df is None or df.empty:
+        return None
+
     if "resolution_time_group" in df.columns:
         counts = df["resolution_time_group"].value_counts().reset_index()
         counts.columns = ["group", "count"]
 
-        # Urutkan kategori waktu agar teratur
         cat_order = [
             "≤ 30 Menit",
             "31 - 60 Menit",
@@ -289,13 +297,7 @@ def chart_waktu_penyelesaian(df):
             title="<b>Distribusi Waktu Penyelesaian Tiket</b>",
         )
     else:
-        # Fallback data jika kolom belum dihitung
-        categories = [
-            "≤ 30 Menit",
-            "31 - 60 Menit",
-            "61 - 120 Menit",
-            "> 240 Menit",
-        ]
+        categories = ["≤ 30 Menit", "31 - 60 Menit", "61 - 120 Menit", "> 240 Menit"]
         values = [0, 0, 0, 0]
         fig = px.bar(
             x=values,
@@ -313,3 +315,42 @@ def chart_waktu_penyelesaian(df):
         plot_bgcolor="white",
     )
     return fig
+
+def chart_subkategori_bar(df, title_name, filter_category=None):
+    """Horizontal Bar Chart: Break down Subkategori"""
+    if df is None or df.empty:
+        return None
+
+    df_filtered = df.copy()
+    
+    # Filter berdasarkan kategori jika parameter filter_category diisi
+    if filter_category and "category_split_1" in df_filtered.columns:
+        df_filtered = df_filtered[df_filtered["category_split_1"] == filter_category]
+
+    cat_col = (
+        "category_split_2"
+        if "category_split_2" in df_filtered.columns
+        else ("category_name" if "category_name" in df_filtered.columns else None)
+    )
+    if cat_col and cat_col in df_filtered.columns:
+        counts = df_filtered[cat_col].value_counts().reset_index().head(5)
+        counts.columns = [cat_col, "Jumlah"]
+        counts = counts.sort_values(by="Jumlah", ascending=True)
+
+        fig = px.bar(
+            counts,
+            x="Jumlah",
+            y=cat_col,
+            orientation="h",
+            title=f"<b>{title_name}</b>",
+        )
+        fig.update_traces(marker_color=RED_COLOR)
+        fig.update_layout(
+            height=240,
+            margin=dict(l=10, r=10, t=35, b=10),
+            xaxis_title="Jumlah Case",
+            yaxis_title="",
+            plot_bgcolor="white",
+        )
+        return fig
+    return None

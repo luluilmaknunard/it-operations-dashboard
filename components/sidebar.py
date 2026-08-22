@@ -45,5 +45,8 @@ def render_sidebar():
                     st.sidebar.success(f"✅ Data Siap: {len(df):,} baris")
             except Exception as e:
                 st.sidebar.error(f"Gagal membaca file: {e}")
+    
+    # PERBAIKAN: Ambil data dari session_state sebelum di-return
+    df_raw = st.session_state.get('df_raw', None)
                 
-    return menu
+    return menu, df_raw
