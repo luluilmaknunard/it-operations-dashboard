@@ -6,9 +6,6 @@ def transform_data_and_kpi(df: pd.DataFrame) -> pd.DataFrame:
     Melakukan transformasi data, pemisahan kategori bertingkat, 
     serta perhitungan KPI (MTTR Pending/Non-Pending, Response Time, SLA, Resolution Group, Network Component, dan Ticket Type).
     """
-    if df is None or df.empty:
-        return df
-
     df_transformed = df.copy()
 
     # =========================================================================
@@ -17,15 +14,26 @@ def transform_data_and_kpi(df: pd.DataFrame) -> pd.DataFrame:
     def shorten_to_two_words(name):
         if pd.isna(name) or not str(name).strip():
             return name
+        
+        # TRIM(name) & Split kata berdasarkan spasi
         words = str(name).strip().split()
-        return " ".join(words[:2])
+        if not words:
+            return name
 
-    name_cols = ['created_by_name', 'updated_by_name']
-    for col in name_cols:
-        if col in df_transformed.columns:
-            df_transformed[col] = df_transformed[col].apply(shorten_to_two_words)
+        kata_pertama = words[0]
 
-    # (BEKAS RETURN PREMATUR SUDAH DIHAPUS DI SINI)
+        # IF LOWER(KataPertama) = "muhammad" -> Ambil kata kedua
+        if kata_pertama.lower() == "muhammad":
+            display_name = words[1] if len(words) > 1 else kata_pertama
+        else:
+            display_name = kata_pertama
+
+        # UPPER()
+        return display_name.upper()
+
+    for name_col in ('created_by_name', 'updated_by_name'):
+        if name_col in df_transformed.columns:
+            df_transformed[name_col] = df_transformed[name_col].apply(shorten_to_two_words)
 
     # =========================================================================
     # 1. Pemisahan Category Name Bertingkat
@@ -212,3 +220,21 @@ def classify_ticket_type_initial(df: pd.DataFrame) -> pd.Series:
     
     is_request = text_data.str.contains(req_pattern, regex=True)
     return pd.Series(np.where(is_request, 'Request', 'Gangguan'), index=df.index)
+
+
+def get_nama_display_dax(name):
+    if pd.isna(name) or not str(name).strip():
+        return name
+    words = str(name).strip().split()
+    if not words:
+        return name
+
+    kata_pertama = words[0]
+
+    # Logika DAX: Jika kata pertama "muhammad", pakai kata kedua
+    if kata_pertama.lower() == "muhammad":
+        result = words[1] if len(words) > 1 else kata_pertama
+    else:
+        result = kata_pertama
+
+    return result.upper()

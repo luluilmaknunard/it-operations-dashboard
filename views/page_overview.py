@@ -22,7 +22,7 @@ def render(df_raw):
         st.markdown("## **Executive Overview**")
     with col_filters:
         # Menghasilkan dataframe yang sudah terfilter berdasarkan filter atas
-        df_filtered = render_top_filters(df_raw)
+        df_filtered = render_top_filters(df_raw, key_prefix="overview")
 
     st.markdown("<br>", unsafe_allow_html=True)
 

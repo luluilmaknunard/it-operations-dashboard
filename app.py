@@ -1,4 +1,9 @@
+import components
 import streamlit as st
+import pandas as pd
+import numpy as np
+
+
 
 # 1. Import Komponen Sidebar & Semua View Halaman secara Langsung
 from components.sidebar import render_sidebar
@@ -70,16 +75,25 @@ st.markdown("""
 if 'df_raw' not in st.session_state:
     st.session_state['df_raw'] = None
 
-# 5. Render Sidebar
-menu, df_raw = render_sidebar()
+# 5. Render Sidebar (Tangkap 3 variabel!)
+menu, df_raw, selected_dept = render_sidebar()
 
-# 6. Guard Clause (Validasi Data Upload)
+# 6. Guard Clause
 if df_raw is None:
     st.title(menu)
     st.warning("⚠️ Silakan upload file data tiket terlebih dahulu melalui panel **Upload Data Raw** di sidebar sebelah kiri.")
     st.stop()
 
-# 7. Safe Renderer Helper (Memastikan tidak terjadi crash jika fungsi 'render' hilang/salah nama)
+# 7. PROSES GLOBAL FILTER
+df_filtered = df_raw.copy()
+
+if selected_dept != "Semua":
+    if "department" in df_filtered.columns:
+        df_filtered = df_filtered[df_filtered["department"] == selected_dept]
+    elif "unit_name" in df_filtered.columns:
+        df_filtered = df_filtered[df_filtered["unit_name"] == selected_dept]
+
+# 8. Safe Renderer Helper
 def safe_render(module, df, page_name):
     if hasattr(module, 'render'):
         module.render(df)
@@ -87,14 +101,13 @@ def safe_render(module, df, page_name):
         module.main(df)
     else:
         st.error(f"❌ Error: Fungsi `render(df_raw)` tidak ditemukan di file `views/{page_name}.py`!")
-        st.info(f"Pastikan di dalam file `views/{page_name}.py` terdapat fungsi `def render(df_raw):`")
 
-# 8. Routing Halaman
+# 9. Routing Halaman (Kirim df_filtered)
 if menu == "🏠 Executive Overview":
-    safe_render(page_overview, df_raw, "page_overview")
+    safe_render(page_overview, df_filtered, "page_overview")
 elif menu == "🚨 Incident Analytics":
-    safe_render(page_incident, df_raw, "page_incident")
+    safe_render(page_incident, df_filtered, "page_incident")
 elif menu == "⚡ IT Performance & SLA":
-    safe_render(page_performance, df_raw, "page_performance")
+    safe_render(page_performance, df_filtered, "page_performance")
 elif menu == "🔍 Pending Investigation":
-    safe_render(page_pending, df_raw, "page_pending")
+    safe_render(page_pending, df_filtered, "page_pending")
