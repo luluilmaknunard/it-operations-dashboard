@@ -2,13 +2,30 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from components.filters import render_top_filters
 
-def render(df_filtered):
+
+def render(df_raw):
+    # ============================================================
+    # 0. HEADER + TOP FILTER
+    # ============================================================
+    col_head, col_filters = st.columns([1, 2.5])
+
+    with col_head:
+        st.markdown("## **📊 Executive Overview**")
+
+    with col_filters:
+        df_filtered = render_top_filters(
+            df_raw,
+            key_prefix="overview"
+        )
+
+    # Jika tidak ada data setelah filter
     if df_filtered is None or df_filtered.empty:
-        st.warning("Data tidak tersedia untuk ditampilkan.")
+        st.warning("Data tidak tersedia untuk filter yang dipilih.")
         return
 
-    st.markdown("## **📊 Executive Overview**")
+    st.markdown("<br>", unsafe_allow_html=True)
 
     # ============================================================
     # 1. SIX SCORECARDS METRICS
