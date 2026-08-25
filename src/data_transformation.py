@@ -154,7 +154,6 @@ def transform_data_and_kpi(df: pd.DataFrame) -> pd.DataFrame:
     # =========================================================================
     df_transformed['ticket_type'] = classify_ticket_type_initial(df_transformed)
 
-    # RETURN RESMI BERADA DI BAGIAN AKHIR
     return df_transformed
 
 
@@ -238,3 +237,26 @@ def get_nama_display_dax(name):
         result = kata_pertama
 
     return result.upper()
+
+
+def transform_category_name(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Fungsi transformasi kategori menggunakan logika original milikmu.
+    Memecah 'category_name' secara otomatis sesuai jumlah delimiter ' - '.
+    """
+    if df is None or df.empty or 'category_name' not in df.columns:
+        return df
+
+    # 1. Split the 'category_name' column (Logika Kamu)
+    split_categories = df['category_name'].astype(str).str.split(' - ', expand=True)
+
+    # 2. Determine the number of new columns created (Logika Kamu)
+    num_new_cols = split_categories.shape[1]
+
+    # 3. Create meaningful column names (Logika Kamu)
+    new_category_cols = [f'category_split_{i+1}' for i in range(num_new_cols)]
+
+    # 4. Assign the new columns to the DataFrame (Logika Kamu)
+    df[new_category_cols] = split_categories
+
+    return df
