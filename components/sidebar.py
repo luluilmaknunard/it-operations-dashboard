@@ -1,14 +1,47 @@
+import io
 import streamlit as st
 import pandas as pd
-import io
 
 from src.data_cleaning import clean_sensitive_data
-from src.ticket_classifier import classify_tickets
+from src.data_transformation import transform_data_and_kpi
+
+
+@st.cache_data(show_spinner=False)
+def _process_uploaded_file(file_bytes: bytes, file_name: str):
+    """
+    Baca + bersihkan + transformasi + klasifikasi ML data mentah.
+
+    Di-cache oleh Streamlit berdasarkan (file_bytes, file_name): selama file
+    yang sama diupload, hasilnya dipakai dari cache -> tidak dihitung ulang
+    saat user pindah halaman / widget lain berinteraksi (yang memicu Streamlit
+    rerun script dari atas). Perhitungan berat (cleaning, KPI, model ML) hanya
+    benar-benar jalan sekali per file baru.
+    """
+    file_name_lower = file_name.lower()
+    df = None
+
+    if file_name_lower.endswith((".csv", ".tsv", ".txt")):
+        sep = "\t" if file_name_lower.endswith(".tsv") else ","
+        for encoding in ["utf-8", "latin-1", "cp1252", "iso-8859-1"]:
+            try:
+                df = pd.read_csv(io.BytesIO(file_bytes), encoding=encoding, sep=sep)
+                break
+            except Exception:
+                continue
+    elif file_name_lower.endswith((".xlsx", ".xls", ".xlsm", ".xlsb")):
+        df = pd.read_excel(io.BytesIO(file_bytes))
+    elif file_name_lower.endswith(".json"):
+        df = pd.read_json(io.BytesIO(file_bytes))
+
+    if df is None or df.empty:
+        return None
+
+    df_cleaned = clean_sensitive_data(df)
+    df_final = transform_data_and_kpi(df_cleaned)
+    return df_final
 
 
 def render_sidebar():
-    selected_dept = "Semua"
-
     # ============================================================
     # 1. NAVIGATION
     # ============================================================
@@ -19,8 +52,8 @@ def render_sidebar():
             "🏠 Executive Overview",
             "🚨 Incident Analytics",
             "⚡ IT Performance & SLA",
-            "🔍 Pending Investigation"
-        ]
+            "🔍 Pending Investigation",
+        ],
     )
 
     st.sidebar.markdown("---")
@@ -33,98 +66,46 @@ def render_sidebar():
     uploaded_file = st.sidebar.file_uploader("Upload File Tiket", type=allowed_types)
 
     # ============================================================
-    # 3. PROSES FILE (HANYA DILAKUKAN JIKA FILE BARU DI-UPLOAD)
+    # 3. PROSES FILE
+    #    - current_file_id: guard supaya blok ini cuma dieksekusi saat file
+    #      BARU diupload, bukan setiap kali script Streamlit rerun (misal saat
+    #      pindah menu navigasi / filter di halaman lain berubah).
+    #    - _process_uploaded_file di-cache Streamlit sebagai lapis kedua: kalau
+    #      file yang sama pernah diproses sebelumnya (mis. setelah reset app),
+    #      hasilnya diambil dari cache tanpa hitung ulang.
     # ============================================================
     if uploaded_file is not None:
-        # Tanda/ID Unik File (Berdasarkan Nama dan Ukuran File)
         file_id = f"{uploaded_file.name}_{uploaded_file.size}"
-        
-        # Cek apakah file ini SUDAH PERNAH diproses sebelumnya?
+
         if st.session_state.get("current_file_id") != file_id:
             try:
-                file_name = uploaded_file.name.lower()
-                df = None
+                with st.spinner("🧹 Membersihkan data & menghitung KPI..."):
+                    file_bytes = uploaded_file.getvalue()
+                    df_final = _process_uploaded_file(file_bytes, uploaded_file.name)
 
-                # --- BACA FILE ---
-                if file_name.endswith((".csv", ".tsv", ".txt")):
-                    sep = "\t" if file_name.endswith(".tsv") else ","
-                    encodings = ["utf-8", "latin-1", "cp1252", "iso-8859-1"]
-                    for encoding in encodings:
-                        try:
-                            uploaded_file.seek(0)
-                            df = pd.read_csv(uploaded_file, encoding=encoding, sep=sep)
-                            break
-                        except Exception:
-                            continue
-                elif file_name.endswith((".xlsx", ".xls", ".xlsm", ".xlsb")):
-                    df = pd.read_excel(uploaded_file)
-                elif file_name.endswith(".json"):
-                    df = pd.read_json(uploaded_file)
-
-                if df is not None and not df.empty:
-                    # --- 1. CLEANING DATA (1x Saja) ---
-                    with st.spinner("🧹 Membersihkan data sensitif..."):
-                        df_cleaned = clean_sensitive_data(df)
-
-                    # --- 2. CEK & KLASIFIKASI AI (1x Saja) ---
-                    has_ticket_type = (
-                        "ticket_type" in df_cleaned.columns and
-                        df_cleaned["ticket_type"].notna().any()
-                    )
-
-                    if not has_ticket_type:
-                        with st.spinner("🤖 AI lokal sedang mengklasifikasikan tiket..."):
-                            df_cleaned = classify_tickets(df_cleaned)
-                    else:
-                        df_cleaned["ticket_type"] = (
-                            df_cleaned["ticket_type"]
-                            .astype(str)
-                            .str.strip()
-                            .str.title()
-                        )
-
-                    # --- 3. SIMPAN HASIL AKHIR KE SESSION STATE & KUNCI ---
-                    st.session_state["df_raw"] = df_cleaned
+                if df_final is not None:
+                    st.session_state["df_raw"] = df_final
                     st.session_state["current_file_id"] = file_id
                     st.session_state["uploaded_file_name"] = uploaded_file.name
+                else:
+                    st.sidebar.error("❌ File kosong atau format tidak didukung.")
 
             except Exception as e:
                 st.sidebar.error(f"❌ Gagal memproses file:\n{e}")
 
     # ============================================================
-    # 4. AMBIL DATA DARI SESSION STATE
+    # 4. AMBIL DATA DARI SESSION STATE & TAMPILKAN STATUS
+    #    (dipakai ulang di setiap halaman TANPA proses ulang)
     # ============================================================
     df_raw = st.session_state.get("df_raw", None)
 
-    # ============================================================
-    # 5. GLOBAL FILTER UI
-    # ============================================================
     if df_raw is not None:
         st.sidebar.success(f"✅ Data Siap: {len(df_raw):,} baris")
-        
-        # Tampilkan distribusi tiket
+
         if "ticket_type" in df_raw.columns:
             ticket_counts = df_raw["ticket_type"].value_counts()
             st.sidebar.markdown("**📊 Hasil Klasifikasi**")
             for ticket_type, count in ticket_counts.items():
                 st.sidebar.write(f"- {ticket_type}: {count:,}")
 
-        st.sidebar.markdown("---")
-        st.sidebar.subheader("🌐 Global Filter")
-
-        # Cari kolom untuk dijadikan filter
-        target_col = None
-        if "department" in df_raw.columns:
-            target_col = "department"
-        elif "unit_name" in df_raw.columns:
-            target_col = "unit_name"
-
-        if target_col:
-            opts = ["Semua"] + sorted(list(df_raw[target_col].dropna().astype(str).unique()))
-            selected_dept = st.sidebar.selectbox(
-                "Filter Department/Unit:",
-                opts,
-                key="global_filter_select"
-            )
-
-    return menu, df_raw, selected_dept
+    return menu, df_raw

@@ -1,33 +1,55 @@
 import streamlit as st
 
+
 def render_kpi_cards(df_filtered):
-    """Membuat 6 kartu KPI sejajar di bagian atas Executive Overview."""
+    """Membuat 6 kartu KPI sejajar, dihitung dari data asli (tidak ada angka hardcoded)."""
     if df_filtered is None or df_filtered.empty:
         return
 
     m1, m2, m3, m4, m5, m6 = st.columns(6)
-    
-    # Perhitungan Data
+
     total_tickets = len(df_filtered)
-    
-    # Hitung total incident (jika ada kolom ticket_type)
-    if 'ticket_type' in df_filtered.columns:
-        total_incidents = len(df_filtered[df_filtered['ticket_type'].astype(str).str.lower() == 'incident'])
+
+    # Total Incidents -> hitung tiket dengan ticket_type == 'Gangguan'
+    if "ticket_type" in df_filtered.columns:
+        tt = df_filtered["ticket_type"].astype(str).str.strip().str.lower()
+        total_incidents = int((tt == "gangguan").sum())
     else:
         total_incidents = total_tickets
 
-    # Hitung pending tiket (jika ada kolom status)
-    if 'status' in df_filtered.columns:
-        pending_tickets = len(df_filtered[df_filtered['status'].astype(str).str.lower().isin(['pending', 'open', 'in progress'])])
-        resolved_tickets = len(df_filtered[df_filtered['status'].astype(str).str.lower().isin(['resolved', 'closed'])])
+    # Pending Tickets -> pakai pending_status hasil transform_data_and_kpi,
+    # fallback ke ticket_status_name kalau pending_status belum ada
+    if "pending_status" in df_filtered.columns:
+        pending_tickets = int((df_filtered["pending_status"] == "Pending").sum())
+    elif "ticket_status_name" in df_filtered.columns:
+        pending_tickets = int(
+            df_filtered["ticket_status_name"]
+            .astype(str).str.lower()
+            .str.contains("pending|open|waiting", na=False)
+            .sum()
+        )
     else:
-        pending_tickets = 140
-        resolved_tickets = total_tickets
+        pending_tickets = 0
 
-    # Tampilkan Metric
+    resolved_tickets = max(total_tickets - pending_tickets, 0)
+
+    # SLA Breaches -> dari kolom sla_status ('Breach' vs 'Comply')
+    if "sla_status" in df_filtered.columns and (df_filtered["sla_status"] != "UNDETERMINED").any():
+        sla_breaches = int((df_filtered["sla_status"] == "Breach").sum())
+        sla_display = f"{sla_breaches:,}"
+    else:
+        sla_display = "N/A"
+
+    # Average MTTR -> rata-rata mttr_minutes
+    if "mttr_minutes" in df_filtered.columns and df_filtered["mttr_minutes"].notna().any():
+        avg_mttr = df_filtered["mttr_minutes"].mean()
+        mttr_display = f"{avg_mttr:.2f} Menit"
+    else:
+        mttr_display = "N/A"
+
     m1.metric("Total Tickets", f"{total_tickets:,}")
     m2.metric("Total Incidents", f"{total_incidents:,}")
     m3.metric("Pending Tickets", f"{pending_tickets:,}")
     m4.metric("Resolved Tickets", f"{resolved_tickets:,}")
-    m5.metric("SLA Breaches", "24")
-    m6.metric("Average MTTR ⭐", "38.70 Menit")
+    m5.metric("SLA Breaches", sla_display)
+    m6.metric("Average MTTR", mttr_display)

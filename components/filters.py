@@ -1,5 +1,8 @@
 ﻿import streamlit as st
 import pandas as pd
+from src.ticket_classifier import classify_tickets
+from src.network_classifier import classify_network_component
+
 
 def render_top_filters(df, key_prefix="default"):
     if df is None or df.empty:

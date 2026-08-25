@@ -1,11 +1,20 @@
+import os
+import sys
 import pandas as pd
 import numpy as np
+
+from src.ticket_classifier import classify_tickets
+from src.network_classifier import classify_network_component
+
 
 def transform_data_and_kpi(df: pd.DataFrame) -> pd.DataFrame:
     """
     Melakukan transformasi data, pemisahan kategori bertingkat, 
-    serta perhitungan KPI (MTTR Pending/Non-Pending, Response Time, SLA, Resolution Group, Network Component, dan Ticket Type).
+    perhitungan KPI, serta Klasifikasi ML (Network Component & Ticket Type).
     """
+    if df is None or df.empty:
+        return df
+
     df_transformed = df.copy()
 
     # =========================================================================
@@ -15,20 +24,17 @@ def transform_data_and_kpi(df: pd.DataFrame) -> pd.DataFrame:
         if pd.isna(name) or not str(name).strip():
             return name
         
-        # TRIM(name) & Split kata berdasarkan spasi
         words = str(name).strip().split()
         if not words:
             return name
 
         kata_pertama = words[0]
 
-        # IF LOWER(KataPertama) = "muhammad" -> Ambil kata kedua
         if kata_pertama.lower() == "muhammad":
             display_name = words[1] if len(words) > 1 else kata_pertama
         else:
             display_name = kata_pertama
 
-        # UPPER()
         return display_name.upper()
 
     for name_col in ('created_by_name', 'updated_by_name'):
@@ -37,16 +43,17 @@ def transform_data_and_kpi(df: pd.DataFrame) -> pd.DataFrame:
 
     # =========================================================================
     # 1. Pemisahan Category Name Bertingkat
-    #    Mendukung delimiter ' - ' maupun ' > '
     # =========================================================================
+    # Pemisahan Category Name yang lebih aman (menangani '-' dengan atau tanpa spasi)
     if 'category_name' in df_transformed.columns:
-        # Menangani pemisah ' - ' atau ' > ' atau '/'
-        split_cats = df_transformed['category_name'].astype(str).str.split(r'\s*(?:-|\||>)\s*', expand=True)
-        for i in range(split_cats.shape[1]):
-            col_name = f'category_split_{i+1}'
-            df_transformed[col_name] = split_cats[i].str.strip()
-            # Ganti teks 'nan' atau 'None' dengan None murni
-            df_transformed[col_name] = df_transformed[col_name].replace(['nan', 'None', '', 'null'], None)
+            # Regex split fleksibel untuk strip (-), pipe (|), atau (>)
+            split_cats = df_transformed['category_name'].astype(str).str.split(r'\s*(?:-|\||>)\s*', expand=True)
+            
+            for i in range(split_cats.shape[1]):
+                col_name = f'category_split_{i+1}'
+                df_transformed[col_name] = split_cats[i].str.strip()
+                df_transformed[col_name] = df_transformed[col_name].replace(['nan', 'None', '', 'null'], None)
+
 
     # =========================================================================
     # 2. Konversi Kolom Waktu ke Datetime
@@ -60,37 +67,50 @@ def transform_data_and_kpi(df: pd.DataFrame) -> pd.DataFrame:
             df_transformed[col] = pd.to_datetime(df_transformed[col], errors='coerce')
 
     # =========================================================================
-    # 3. Hitung MTTR Pending & MTTR Non-Pending
+    # 2. Konversi Kolom Waktu ke Datetime (Dibuat Lebih Fleksibel & Paksa ISO/Format)
     # =========================================================================
-    # MTTR Pending (menit)
-    if 'date_last_update' in df_transformed.columns and 'date_pending' in df_transformed.columns:
-        df_transformed['mttr_pending_minutes'] = (
-            (df_transformed['date_last_update'] - df_transformed['date_pending']).dt.total_seconds() / 60
-        ).clip(lower=0)
-    else:
-        df_transformed['mttr_pending_minutes'] = 0.0
-
-    # MTTR Non-Pending (menit)
+    # =========================================================================
+    # 2. Konversi Kolom Waktu ke Datetime (Aman dari ArrowTypeError)
+    # =========================================================================
+    time_columns = [
+        'date_created_at', 'date_start_interaction', 'date_assigned', 
+        'date_pending', 'date_last_update'
+    ]
+    
+    for col in time_columns:
+        if col in df_transformed.columns:
+            # Paksa konversi ke datetime64, string aneh diubah jadi NaT (Not a Time)
+            df_transformed[col] = pd.to_datetime(df_transformed[col], errors='coerce')
+            
+    # =========================================================================
+    # 3. Hitung MTTR (Memastikan Nilai Terisi & Tipe Data Benar)
+    # =========================================================================
+    # Tentukan tanggal selesai: utamakan date_last_update, jika kosong gunakan date_created_at/sekarang
     if 'date_last_update' in df_transformed.columns and 'date_assigned' in df_transformed.columns:
-        df_transformed['mttr_non_pending_minutes'] = (
-            (df_transformed['date_last_update'] - df_transformed['date_assigned']).dt.total_seconds() / 60
-        ).clip(lower=0)
+        
+        # Hitung durasi dasar: date_last_update - date_assigned
+        durasi_menit = (df_transformed['date_last_update'] - df_transformed['date_assigned']).dt.total_seconds() / 60
+        
+        # Jika date_pending terisi, hitung durasi sampai pending: date_pending - date_assigned
+        if 'date_pending' in df_transformed.columns:
+            durasi_pending = (df_transformed['date_pending'] - df_transformed['date_assigned']).dt.total_seconds() / 60
+            
+            # Pilih durasi pending jika ada dan valid (>0), jika tidak pakai durasi dasar
+            df_transformed['mttr_minutes'] = np.where(
+                df_transformed['date_pending'].notna() & (durasi_pending > 0),
+                durasi_pending,
+                durasi_menit
+            )
+        else:
+            df_transformed['mttr_minutes'] = durasi_menit
+
+        # Konversi ke angka secara paksa & hilangkan NaN
+        df_transformed['mttr_minutes'] = pd.to_numeric(df_transformed['mttr_minutes'], errors='coerce').fillna(0)
+        df_transformed['mttr_minutes'] = df_transformed['mttr_minutes'].clip(lower=0)
     else:
-        df_transformed['mttr_non_pending_minutes'] = 0.0
+        df_transformed['mttr_minutes'] = 0.0
 
-    # Total MTTR Minutes untuk perhitungan SLA
-    def calculate_mttr(row):
-        if pd.notnull(row.get('date_pending')) and pd.notnull(row.get('date_assigned')):
-            val = (row['date_pending'] - row['date_assigned']).total_seconds() / 60
-            return max(val, 0)
-        elif pd.notnull(row.get('date_last_update')) and pd.notnull(row.get('date_assigned')):
-            val = (row['date_last_update'] - row['date_assigned']).total_seconds() / 60
-            return max(val, 0)
-        return 0.0
-
-    df_transformed['mttr_minutes'] = df_transformed.apply(calculate_mttr, axis=1)
-
-    # Pending Status Flag
+    # Status Pending
     if 'date_pending' in df_transformed.columns:
         df_transformed['pending_status'] = np.where(
             df_transformed['date_pending'].notna(), 'Pending', 'Non-Pending'
@@ -145,80 +165,16 @@ def transform_data_and_kpi(df: pd.DataFrame) -> pd.DataFrame:
         df_transformed['resolution_time_group'] = df_transformed['resolution_time_minutes'].apply(group_resolution_time)
 
     # =========================================================================
-    # 7. Pengelompokan Network Component Rule-Based
+    # 7 & 8. KLASIFIKASI MODEL MACHINE LEARNING (.pkl)
     # =========================================================================
-    df_transformed['network_component'] = classify_network_component(df_transformed)
-
-    # =========================================================================
-    # 8. Pengelompokan Ticket Type (Gangguan vs Request)
-    # =========================================================================
-    df_transformed['ticket_type'] = classify_ticket_type_initial(df_transformed)
+    # Menjalankan Machine Learning untuk Ticket Type & Network Component
+    try:
+        df_transformed = classify_tickets(df_transformed)
+        df_transformed = classify_network_component(df_transformed)
+    except Exception as e:
+        print(f"Warning: Gagal mengeksekusi model ML pada data: {e}")
 
     return df_transformed
-
-
-def classify_network_component(df: pd.DataFrame) -> pd.Series:
-    """Mengonversi logika DAX PowerBI SWITCH(TRUE()) ke Pandas Vectorized String Search."""
-    cols = ['ticket_symptom', 'ticket_summary', 'remark', 'ticket_rootcouse']
-    text_data = pd.Series("", index=df.index)
-
-    for col in cols:
-        if col in df.columns:
-            text_data += " " + df[col].fillna("").astype(str)
-
-    text_data = text_data.str.lower()
-
-    # Define Pattern Rules sesuai SWITCH DAX
-    lan_pattern = r'kabel lan|lan|koneksi lan|network pc|network pada pc|port switch|switch|port|patch|rj45|not connected|unplugged|ping|rto|intermitten'
-    internet_pattern = r'internet|koneksi internet|internet down|internet tidak stabil|indihome|astinet|backup koneksi|backup connection'
-    vpn_pattern = r'vpn|forticlient|pritunel|pritunl'
-    ip_pattern = r'ip address|public ip|allow akses ip|allow access|ip public'
-    dns_pattern = r'\bdns\b'
-    router_pattern = r'mikrotik|router|gateway'
-    web_pattern = r'browser|chrome|website|\bweb\b|url|host'
-    server_pattern = r'ftp|server|cms|rabbit'
-
-    conditions = [
-        text_data.str.contains(lan_pattern, regex=True),
-        text_data.str.contains(internet_pattern, regex=True),
-        text_data.str.contains(vpn_pattern, regex=True),
-        text_data.str.contains(ip_pattern, regex=True),
-        text_data.str.contains(dns_pattern, regex=True),
-        text_data.str.contains(router_pattern, regex=True),
-        text_data.str.contains(web_pattern, regex=True),
-        text_data.str.contains(server_pattern, regex=True)
-    ]
-
-    choices = [
-        "LAN Infrastructure",
-        "Internet",
-        "VPN",
-        "IP Address",
-        "DNS",
-        "Router / Mikrotik",
-        "Website Access",
-        "Server / Network Service"
-    ]
-
-    return pd.Series(np.select(conditions, choices, default="Network Lainnya"), index=df.index)
-
-
-def classify_ticket_type_initial(df: pd.DataFrame) -> pd.Series:
-    """Klasifikasi awal Gangguan vs Request berbasis kata kunci freetext."""
-    cols = ['ticket_rootcouse', 'remark', 'ticket_summary', 'ticket_symptom']
-    text_data = pd.Series("", index=df.index)
-
-    for col in cols:
-        if col in df.columns:
-            text_data += " " + df[col].fillna("").astype(str)
-
-    text_data = text_data.str.lower()
-
-    # Pattern untuk permintaan/request
-    req_pattern = r'permintaan|request|rekording|recording|penarikan data|tarik data|minta data|pembukaan|create|pembuatan|akses|permission|minta'
-    
-    is_request = text_data.str.contains(req_pattern, regex=True)
-    return pd.Series(np.where(is_request, 'Request', 'Gangguan'), index=df.index)
 
 
 def get_nama_display_dax(name):
@@ -230,7 +186,6 @@ def get_nama_display_dax(name):
 
     kata_pertama = words[0]
 
-    # Logika DAX: Jika kata pertama "muhammad", pakai kata kedua
     if kata_pertama.lower() == "muhammad":
         result = words[1] if len(words) > 1 else kata_pertama
     else:
@@ -240,23 +195,21 @@ def get_nama_display_dax(name):
 
 
 def transform_category_name(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Fungsi transformasi kategori menggunakan logika original milikmu.
-    Memecah 'category_name' secara otomatis sesuai jumlah delimiter ' - '.
-    """
     if df is None or df.empty or 'category_name' not in df.columns:
         return df
 
-    # 1. Split the 'category_name' column (Logika Kamu)
     split_categories = df['category_name'].astype(str).str.split(' - ', expand=True)
-
-    # 2. Determine the number of new columns created (Logika Kamu)
     num_new_cols = split_categories.shape[1]
-
-    # 3. Create meaningful column names (Logika Kamu)
     new_category_cols = [f'category_split_{i+1}' for i in range(num_new_cols)]
-
-    # 4. Assign the new columns to the DataFrame (Logika Kamu)
     df[new_category_cols] = split_categories
+
+    # === TEMPEL DI ATAS RETURN DF_TRANSFORMED ===
+    print("\n" + "="*40)
+    print("📌 DEBUG DATASET SAYA:")
+    print("Daftar Kolom Ada:", list(df_transformed.columns))
+    print("Contoh 3 mttr_minutes:", df_transformed['mttr_minutes'].head(3).tolist())
+    print("="*40 + "\n")
+
+    return df_transformed
 
     return df
