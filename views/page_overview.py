@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from components.filters import render_top_filters
+from components.charts import chart_department
 
 
 def render(df_raw):
@@ -64,18 +65,68 @@ def render(df_raw):
     else:
         tiket_luar_sla = 0
 
-    # F. Rata-Rata MTTR
-    mttr_col = 'mttr_minutes' if 'mttr_minutes' in df_filtered.columns else ('MTTR' if 'MTTR' in df_filtered.columns else 'mttr_no_pending')
-    avg_mttr = df_filtered[mttr_col].mean() if mttr_col in df_filtered.columns else 0
+   # ============================================================
+    # F. RATA-RATA MTTR
+    # ============================================================
 
-    # Display 6 Metric Cards
+    if 'mttr_minutes' in df_filtered.columns:
+
+        mttr_valid = pd.to_numeric(
+            df_filtered['mttr_minutes'],
+            errors='coerce'
+        )
+
+        # Hanya ambil MTTR yang valid
+        mttr_valid = mttr_valid[
+            mttr_valid.notna() &
+            (mttr_valid >= 0)
+        ]
+
+        avg_mttr = (
+            mttr_valid.mean()
+            if not mttr_valid.empty
+            else 0
+        )
+
+    else:
+        avg_mttr = 0
+
+
+    # ============================================================
+    # 7. DISPLAY KPI CARDS
+    # ============================================================
+
     m1, m2, m3, m4, m5, m6 = st.columns(6)
-    m1.metric("Total Tiket", f"{total_tiket:,}")
-    m2.metric("Total Gangguan", f"{total_gangguan:,}")
-    m3.metric("Tiket Pending", f"{tiket_pending:,}")
-    m4.metric("Tiket Selesai", f"{tiket_selesai:,}")
-    m5.metric("Tiket di Luar SLA", f"{tiket_luar_sla:,}")
-    m6.metric("Rata-rata MTTR ⭐", f"{avg_mttr:.2f} Menit")
+
+    m1.metric(
+        "Total Tiket",
+        f"{total_tiket:,}"
+    )
+
+    m2.metric(
+        "Total Gangguan",
+        f"{total_gangguan:,}"
+    )
+
+    m3.metric(
+        "Tiket Pending",
+        f"{tiket_pending:,}"
+    )
+
+    m4.metric(
+        "Tiket Selesai",
+        f"{tiket_selesai:,}"
+    )
+
+    m5.metric(
+        "Tiket di Luar SLA",
+        f"{tiket_luar_sla:,}"
+    )
+
+    m6.metric(
+        "Rata-rata MTTR ⭐",
+        f"{round(avg_mttr):,} Menit"
+    )
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -178,52 +229,87 @@ def render(df_raw):
     # ============================================================
     d1, d2 = st.columns([1.2, 1.8])
 
-    # ------------------------------------------------------------
-    # 6. Departemen dengan Gangguan Terbanyak (Decomposition Tree / Horizontal Bar)
-    # ------------------------------------------------------------
-    with d1:
-        st.markdown("##### **Departemen dengan Gangguan Terbanyak**")
-        dept_col = 'department_name' if 'department_name' in df_filtered.columns else ('departement' if 'departement' in df_filtered.columns else 'nama_dept')
-        
-        sort_order = st.radio("Urutan Data:", ["Terbanyak", "Tersedikit"], horizontal=True, key="exec_dept_sort")
-        
-        if dept_col in df_filtered.columns:
-            df_dept = df_filtered.groupby(dept_col)[id_col].nunique().reset_index()
-            df_dept.columns = ['Departemen', 'Jumlah Kasus']
-            
-            is_ascending = True if sort_order == "Tersedikit" else False
-            df_dept = df_dept.sort_values(by='Jumlah Kasus', ascending=is_ascending).head(7)
-            
-            # Mengurutkan ulang untuk Plotly bar horizontal
-            df_dept_plot = df_dept.sort_values(by='Jumlah Kasus', ascending=not is_ascending)
+    # ============================================================
+    # DEPARTMENT DENGAN GANGGUAN TERBANYAK
+    # ============================================================
 
-            fig_dept = px.bar(df_dept_plot, x='Jumlah Kasus', y='Departemen', orientation='h', text='Jumlah Kasus')
-            fig_dept.update_traces(marker_color='#6B1D2F', textposition='outside')
-            fig_dept.update_layout(margin=dict(l=10, r=10, t=10, b=10), height=280, xaxis_title=None, yaxis_title=None)
-            st.plotly_chart(fig_dept, use_container_width=True)
-        else:
-            st.info("Kolom departemen tidak ditemukan")
+    with d1:
+        st.markdown("Department dengan Gangguan")
+
+        chart_department(
+            df_filtered,
+            key_prefix="overview"
+        )
 
     # ------------------------------------------------------------
     # 7. Treemap: Layanan dengan Laporan Gangguan Terbanyak
     # ------------------------------------------------------------
     with d2:
         st.markdown("##### **Layanan dengan Laporan Gangguan Terbanyak**")
-        service_col = 'service_name' if 'service_name' in df_filtered.columns else ('service' if 'service' in df_filtered.columns else 'nama_layanan')
-        
+
+        service_col = (
+            'service_name'
+            if 'service_name' in df_filtered.columns
+            else (
+                'service'
+                if 'service' in df_filtered.columns
+                else 'nama_layanan'
+            )
+        )
+
         if service_col in df_filtered.columns:
-            df_service = df_filtered.groupby(service_col)[id_col].nunique().reset_index()
+
+            df_service = (
+                df_filtered
+                .groupby(service_col)[id_col]
+                .nunique()
+                .reset_index()
+            )
+
             df_service.columns = ['Layanan', 'Jumlah Kasus']
             df_service = df_service[df_service['Jumlah Kasus'] > 0]
 
-            fig_tree = px.treemap(
-                df_service,
-                path=['Layanan'],
-                values='Jumlah Kasus',
-                color_discrete_sequence=['#A61C1C', '#D32F2F', '#E53935', '#EF5350']
-            )
-            fig_tree.update_traces(root_color="lightgrey")
-            fig_tree.update_layout(margin=dict(l=5, r=5, t=10, b=10), height=280)
-            st.plotly_chart(fig_tree, use_container_width=True)
+            if not df_service.empty:
+
+                fig_tree = px.treemap(
+                    df_service,
+                    path=['Layanan'],
+                    values='Jumlah Kasus',
+                    color_discrete_sequence=[
+                        '#A61C1C',
+                        '#D32F2F',
+                        '#E53935',
+                        '#EF5350'
+                    ]
+                )
+
+                fig_tree.update_traces(
+                    root_color="lightgrey",
+                    textinfo="label+value",
+                    hovertemplate=(
+                        "<b>%{label}</b><br>"
+                        "Jumlah Kasus: %{value:,}"
+                        "<extra></extra>"
+                    )
+                )
+
+                fig_tree.update_layout(
+                        autosize=True,
+                        height=420,
+                        margin=dict(l=5, r=5, t=5, b=5)
+                    )
+
+                st.plotly_chart(
+                    fig_tree,
+                    use_container_width=True,
+                    config={
+                        "displayModeBar": False,
+                        "responsive": True
+                    }
+                )
+
+            else:
+                st.info("Tidak ada data layanan.")
+
         else:
             st.info("Kolom service_name tidak ditemukan")

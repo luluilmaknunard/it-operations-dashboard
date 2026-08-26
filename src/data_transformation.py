@@ -56,67 +56,146 @@ def transform_data_and_kpi(df: pd.DataFrame) -> pd.DataFrame:
 
 
     # =========================================================================
-    # 2. Konversi Kolom Waktu ke Datetime
+    # 2. KONVERSI KOLOM WAKTU KE DATETIME
     # =========================================================================
+    # Data Excel menggunakan format:
+    # DD.MM.YYYY HH:MM:SS
+    #
+    # Contoh:
+    # 01.04.2026 5:23:37
+    # = 1 April 2026 pukul 05:23:37
+    #
+    # dayfirst=True wajib supaya 01.04.2026 tidak dibaca sebagai 4 Januari 2026.
+
     time_columns = [
-        'date_created_at', 'date_start_interaction', 'date_assigned', 
-        'date_pending', 'date_last_update'
+        'date_created_at',
+        'date_start_interaction',
+        'date_assigned',
+        'date_pending',
+        'date_last_update'
     ]
+
     for col in time_columns:
         if col in df_transformed.columns:
-            df_transformed[col] = pd.to_datetime(df_transformed[col], errors='coerce')
-
-    # =========================================================================
-    # 2. Konversi Kolom Waktu ke Datetime (Dibuat Lebih Fleksibel & Paksa ISO/Format)
-    # =========================================================================
-    # =========================================================================
-    # 2. Konversi Kolom Waktu ke Datetime (Aman dari ArrowTypeError)
-    # =========================================================================
-    time_columns = [
-        'date_created_at', 'date_start_interaction', 'date_assigned', 
-        'date_pending', 'date_last_update'
-    ]
-    
-    for col in time_columns:
-        if col in df_transformed.columns:
-            # Paksa konversi ke datetime64, string aneh diubah jadi NaT (Not a Time)
-            df_transformed[col] = pd.to_datetime(df_transformed[col], errors='coerce')
-            
-    # =========================================================================
-    # 3. Hitung MTTR (Memastikan Nilai Terisi & Tipe Data Benar)
-    # =========================================================================
-    # Tentukan tanggal selesai: utamakan date_last_update, jika kosong gunakan date_created_at/sekarang
-    if 'date_last_update' in df_transformed.columns and 'date_assigned' in df_transformed.columns:
-        
-        # Hitung durasi dasar: date_last_update - date_assigned
-        durasi_menit = (df_transformed['date_last_update'] - df_transformed['date_assigned']).dt.total_seconds() / 60
-        
-        # Jika date_pending terisi, hitung durasi sampai pending: date_pending - date_assigned
-        if 'date_pending' in df_transformed.columns:
-            durasi_pending = (df_transformed['date_pending'] - df_transformed['date_assigned']).dt.total_seconds() / 60
-            
-            # Pilih durasi pending jika ada dan valid (>0), jika tidak pakai durasi dasar
-            df_transformed['mttr_minutes'] = np.where(
-                df_transformed['date_pending'].notna() & (durasi_pending > 0),
-                durasi_pending,
-                durasi_menit
-            )
-        else:
-            df_transformed['mttr_minutes'] = durasi_menit
-
-        # Konversi ke angka secara paksa & hilangkan NaN
-        df_transformed['mttr_minutes'] = pd.to_numeric(df_transformed['mttr_minutes'], errors='coerce').fillna(0)
-        df_transformed['mttr_minutes'] = df_transformed['mttr_minutes'].clip(lower=0)
-    else:
-        df_transformed['mttr_minutes'] = 0.0
-
-    # Status Pending
-    if 'date_pending' in df_transformed.columns:
-        df_transformed['pending_status'] = np.where(
-            df_transformed['date_pending'].notna(), 'Pending', 'Non-Pending'
+            df_transformed[col] = pd.to_datetime(
+                df_transformed[col],
+                errors='coerce',
+                dayfirst=True
         )
-    else:
-        df_transformed['pending_status'] = 'Non-Pending'
+
+  # =========================================================================
+    # 3. HITUNG MTTR
+    # =========================================================================
+    #
+    # RUMUS:
+    #
+    # NON-PENDING:
+    #     date_last_update - date_assigned
+    #
+    # PENDING:
+    #     (date_last_update - date_assigned)
+    #     - (date_last_update - date_pending)
+    #
+    # Secara matematis:
+    #     = date_pending - date_assigned
+    #
+    # MTTR dihitung PER TIKET terlebih dahulu.
+    # Setelah itu rata-rata MTTR dihitung dari kolom mttr_minutes.
+    # =========================================================================
+
+    df_transformed['mttr_non_pending_minutes'] = np.nan
+    df_transformed['mttr_pending_minutes'] = np.nan
+    df_transformed['mttr_minutes'] = np.nan
+
+    required_mttr_cols = {
+        'date_assigned',
+        'date_last_update'
+    }
+
+    if required_mttr_cols.issubset(df_transformed.columns):
+
+        # ---------------------------------------------------------
+        # MTTR NON-PENDING
+        # date_last_update - date_assigned
+        # ---------------------------------------------------------
+
+        durasi_non_pending = (
+            df_transformed['date_last_update']
+            - df_transformed['date_assigned']
+        ).dt.total_seconds() / 60
+
+        df_transformed['mttr_non_pending_minutes'] = (
+            durasi_non_pending.where(durasi_non_pending >= 0)
+        )
+
+        # ---------------------------------------------------------
+        # MTTR PENDING
+        #
+        # (last_update - assigned)
+        # -
+        # (last_update - pending)
+        #
+        # = pending - assigned
+        # ---------------------------------------------------------
+
+        if 'date_pending' in df_transformed.columns:
+
+            durasi_total = (
+                df_transformed['date_last_update']
+                - df_transformed['date_assigned']
+            ).dt.total_seconds() / 60
+
+            durasi_pending = (
+                df_transformed['date_last_update']
+                - df_transformed['date_pending']
+            ).dt.total_seconds() / 60
+
+            mttr_pending = (
+                durasi_total - durasi_pending
+            )
+
+            df_transformed['mttr_pending_minutes'] = (
+                mttr_pending.where(mttr_pending >= 0)
+            )
+
+            # -----------------------------------------------------
+            # MTTR FINAL PER TIKET
+            # -----------------------------------------------------
+
+            has_pending = (
+                df_transformed['date_pending'].notna()
+            )
+
+            df_transformed['mttr_minutes'] = np.where(
+                has_pending,
+                df_transformed['mttr_pending_minutes'],
+                df_transformed['mttr_non_pending_minutes']
+            )
+
+        else:
+
+            df_transformed['mttr_minutes'] = (
+                df_transformed['mttr_non_pending_minutes']
+            )
+
+    # ---------------------------------------------------------
+    # Pastikan numeric
+    # ---------------------------------------------------------
+
+    for col in [
+        'mttr_pending_minutes',
+        'mttr_non_pending_minutes',
+        'mttr_minutes'
+    ]:
+
+        df_transformed[col] = pd.to_numeric(
+            df_transformed[col],
+            errors='coerce'
+        )
+
+        df_transformed[col] = df_transformed[col].where(
+            df_transformed[col] >= 0
+        )
 
     # =========================================================================
     # 4. Hitung Response Time (Menit)
@@ -126,7 +205,7 @@ def transform_data_and_kpi(df: pd.DataFrame) -> pd.DataFrame:
             (df_transformed['date_assigned'] - df_transformed['date_start_interaction']).dt.total_seconds() / 60
         ).clip(lower=0)
     else:
-        df_transformed['response_time_minutes'] = 0.0
+         df_transformed['response_time_minutes'] = 0.0
 
     # =========================================================================
     # 5. Hitung SLA Status (Comply vs Breach)
@@ -202,14 +281,5 @@ def transform_category_name(df: pd.DataFrame) -> pd.DataFrame:
     num_new_cols = split_categories.shape[1]
     new_category_cols = [f'category_split_{i+1}' for i in range(num_new_cols)]
     df[new_category_cols] = split_categories
-
-    # === TEMPEL DI ATAS RETURN DF_TRANSFORMED ===
-    print("\n" + "="*40)
-    print("📌 DEBUG DATASET SAYA:")
-    print("Daftar Kolom Ada:", list(df_transformed.columns))
-    print("Contoh 3 mttr_minutes:", df_transformed['mttr_minutes'].head(3).tolist())
-    print("="*40 + "\n")
-
-    return df_transformed
 
     return df

@@ -187,99 +187,245 @@ def chart_trend_harian_multi(df):
     fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor="#F0F0F0")
     return fig
 
+def calendar_heatmap(df):
+    """
+    Calendar heatmap bergaya kalender.
+    Kolom  : Senin - Minggu
+    Baris  : minggu
+    Isi    : jumlah gangguan per hari
+    """
 
-def chart_kalender_heatmap(df):
-    """Heatmap Kalender Persis Power BI"""
+    import pandas as pd
+    import plotly.graph_objects as go
+
     if df is None or df.empty:
         return None
 
-    df_clean = df.copy()
-
+    # =========================================================
+    # CARI KOLOM TANGGAL
+    # =========================================================
     date_col = None
-    if 'Date' in df_clean.columns:
-        date_col = 'Date'
-    else:
-        for c in df_clean.columns:
-            if str(c).strip().lower() in ['date_created_at', 'created_at', 'created_date', 'tanggal', 'date']:
-                date_col = c
-                break
 
-    if not date_col:
+    for col in [
+        "date_created_at",
+        "created_at",
+        "created_date",
+        "Date",
+        "date"
+    ]:
+        if col in df.columns:
+            date_col = col
+            break
+
+    if date_col is None:
         return None
 
-    df_clean['Date_Parsed'] = pd.to_datetime(df_clean[date_col], dayfirst=True, errors='coerce')
-    df_clean = df_clean.dropna(subset=['Date_Parsed'])
+    # =========================================================
+    # PARSE TANGGAL
+    # =========================================================
+    temp = df.copy()
 
-    if df_clean.empty:
+    temp["_cal_date"] = pd.to_datetime(
+        temp[date_col],
+        dayfirst=True,
+        errors="coerce"
+    )
+
+    temp = temp.dropna(subset=["_cal_date"])
+
+    if temp.empty:
         return None
 
-    day_of_month = df_clean['Date_Parsed'].dt.day
-    first_day_of_month = df_clean['Date_Parsed'].dt.to_period('M').dt.to_timestamp()
-    first_day_weekday = first_day_of_month.dt.weekday
+    temp["_cal_date"] = temp["_cal_date"].dt.normalize()
 
-    df_clean['Week_In_Month'] = ((day_of_month + first_day_weekday - 1) // 7) + 1
-    df_clean['Week_Day'] = df_clean['Date_Parsed'].dt.strftime('%a')
+    # =========================================================
+    # JUMLAH TICKET PER HARI
+    # =========================================================
+    daily = (
+        temp.groupby("_cal_date")
+        .size()
+        .reset_index(name="Jumlah")
+    )
 
-    days_order = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+    # =========================================================
+    # RANGE KALENDER
+    # =========================================================
+    min_date = daily["_cal_date"].min()
+    max_date = daily["_cal_date"].max()
 
-    heatmap_matrix = df_clean.groupby(['Week_In_Month', 'Week_Day']).size().unstack(fill_value=0)
+    # Senin dari minggu pertama
+    start_date = (
+        min_date - pd.Timedelta(days=min_date.weekday())
+    )
 
-    for d in days_order:
-        if d not in heatmap_matrix.columns:
-            heatmap_matrix[d] = 0
+    # Minggu dari minggu terakhir
+    end_date = (
+        max_date + pd.Timedelta(days=6 - max_date.weekday())
+    )
 
-    heatmap_matrix = heatmap_matrix[days_order].sort_index(ascending=True)
+    dates = pd.date_range(
+        start=start_date,
+        end=end_date,
+        freq="D"
+    )
 
-    if heatmap_matrix.empty:
-        return None
+    calendar = pd.DataFrame({
+        "Tanggal": dates
+    })
 
-    week_labels = [str(int(w)) for w in heatmap_matrix.index]
-    z_values = heatmap_matrix.values
-    text_values = [[str(val) if val > 0 else "" for val in row] for row in z_values]
+    calendar = calendar.merge(
+        daily,
+        left_on="Tanggal",
+        right_on="_cal_date",
+        how="left"
+    )
 
-    fig = go.Figure(
-        data=go.Heatmap(
-            z=z_values,
-            x=heatmap_matrix.columns,
+    calendar["Jumlah"] = (
+        calendar["Jumlah"]
+        .fillna(0)
+        .astype(int)
+    )
+
+    # =========================================================
+    # POSISI GRID KALENDER
+    # =========================================================
+    calendar["Hari"] = calendar["Tanggal"].dt.weekday
+
+    calendar["Minggu"] = (
+        (calendar["Tanggal"] - start_date).dt.days // 7
+    )
+
+    # =========================================================
+    # MATRKS JUMLAH
+    # =========================================================
+    pivot = calendar.pivot(
+        index="Minggu",
+        columns="Hari",
+        values="Jumlah"
+    )
+
+    pivot = pivot.reindex(
+        index=range(calendar["Minggu"].max() + 1),
+        columns=range(7),
+        fill_value=0
+    )
+
+    # =========================================================
+    # TEXT DI DALAM CELL
+    # =========================================================
+    text_matrix = []
+
+    for minggu in pivot.index:
+
+        row = []
+
+        for hari in pivot.columns:
+
+            jumlah = int(pivot.loc[minggu, hari])
+
+            # Tampilkan angka hanya kalau ada ticket
+            if jumlah > 0:
+                row.append(str(jumlah))
+            else:
+                row.append("")
+
+        text_matrix.append(row)
+
+    # =========================================================
+    # LABEL MINGGU
+    # =========================================================
+    week_labels = [
+        f"Minggu {i + 1}"
+        for i in pivot.index
+    ]
+
+    day_labels = [
+        "Mon",
+        "Tue",
+        "Wed",
+        "Thu",
+        "Fri",
+        "Sat",
+        "Sun"
+    ]
+
+    # =========================================================
+    # HEATMAP
+    # =========================================================
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Heatmap(
+            z=pivot.values,
+            x=day_labels,
             y=week_labels,
-            text=text_values,
+
+            text=text_matrix,
             texttemplate="%{text}",
-            textfont=dict(size=11, color="black"),
+
+            textfont=dict(
+                size=12
+            ),
+
+            hovertemplate=(
+                "<b>%{x}</b><br>"
+                "<b>%{y}</b><br>"
+                "Jumlah Gangguan: %{z}"
+                "<extra></extra>"
+            ),
+
             colorscale=[
-                [0.0, "#FFEBEE"],
-                [0.3, "#FFCDD2"],
-                [0.7, "#E53935"],
-                [1.0, "#B71C1C"]
+                [0.00, "#FFF5F5"],
+                [0.20, "#FECACA"],
+                [0.40, "#F87171"],
+                [0.60, "#EF4444"],
+                [0.80, "#DC2626"],
+                [1.00, "#991B1B"],
             ],
-            showscale=False,
-            hovertemplate="Hari: <b>%{x}</b><br>Minggu ke-<b>%{y}</b><br>Jumlah: <b>%{z} Kasus</b><extra></extra>",
-            xgap=1,
-            ygap=1
+
+            xgap=2,
+            ygap=2,
+
+            showscale=False
         )
     )
 
+    # =========================================================
+    # LAYOUT
+    # =========================================================
     fig.update_layout(
-        title={
-            'text': "<b>Kalender</b>",
-            'y': 0.98,
-            'x': 0.5,
-            'xanchor': 'center',
-            'yanchor': 'top',
-            'font': dict(size=14)
-        },
-        height=280,
-        margin=dict(l=10, r=10, t=55, b=20),
-        xaxis=dict(side="top", tickfont=dict(size=11)),
+
+        height=300,
+
+        margin=dict(
+            l=55,
+            r=10,
+            t=35,
+            b=10
+        ),
+
+        xaxis=dict(
+            side="top",
+            fixedrange=True,
+            showgrid=False
+        ),
+
         yaxis=dict(
             autorange="reversed",
-            type="category",
-            title=dict(text="Minggu ke-", font=dict(size=11))
+            fixedrange=True,
+            showgrid=False,
+            title=""
         ),
-        plot_bgcolor="white"
+
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+
+        font=dict(
+            size=11
+        )
     )
 
     return fig
-
 
 # ==============================================================================
 # 3. CHART KATEGORI & BREAKDOWN
@@ -324,7 +470,6 @@ def chart_kategori_horizontal(df):
     )
     fig.update_xaxes(showgrid=True, gridcolor="#F0F0F0")
     return fig
-
 
 def chart_subkategori_bar(df, title_name="Subkategori", custom_col=None):
     """
@@ -381,65 +526,148 @@ def chart_subkategori_bar(df, title_name="Subkategori", custom_col=None):
 
     return fig
 
+def chart_department(df, key_prefix="default"):
+    """
+    Menampilkan horizontal bar chart jumlah gangguan
+    berdasarkan Department.
+    """
 
-def chart_dept_decomposition(df):
-    """
-    Icicle Chart: 'Departemen dengan Gangguan Terbanyak' (department -> unit_name).
-    Dipilih dibanding treemap karena layout kotak-kotak bertingkat horizontalnya
-    paling mirip visual decomposition tree Power BI. Kalau kolom unit_name tidak
-    ada, fallback jadi icicle 1 level (department saja).
-    """
     if df is None or df.empty:
-        return None
+        st.info("Tidak ada data untuk ditampilkan.")
+        return
 
-    dept_col = pick_best_column(df, ["department", "nama_department", "dept"])
-    if not dept_col:
-        return None
+    # ============================================================
+    # CARI KOLOM DEPARTMENT
+    # ============================================================
 
-    df_clean = df.copy()
-    df_clean[dept_col] = df_clean[dept_col].astype(str).str.strip()
-    df_clean = df_clean[~df_clean[dept_col].isin(["nan", "None", "", "null"])]
-    if df_clean.empty:
-        return None
+    dept_col = None
 
-    unit_col = pick_best_column(df_clean, ["unit_name", "nama_unit"])
-    path = [dept_col, unit_col] if unit_col else [dept_col]
+    for col in df.columns:
 
-    counts = df_clean.groupby(path).size().reset_index(name="count")
-
-    try:
-        fig = px.icicle(
-            counts,
-            path=path,
-            values="count",
-            color="count",
-            color_continuous_scale=["#FFE5E5", "#FF4D4D", "#B30000"],
-            title="<b>Departemen dengan Gangguan Terbanyak</b>",
+        col_clean = (
+            str(col)
+            .strip()
+            .lower()
+            .replace("_", " ")
+            .replace("-", " ")
         )
-    except (AttributeError, ValueError):
-        # Fallback kalau versi plotly di environment belum support px.icicle (perlu plotly >= 5.7)
-        fig = px.treemap(
-            counts,
-            path=path,
-            values="count",
-            color="count",
-            color_continuous_scale=["#FFE5E5", "#FF4D4D", "#B30000"],
-            title="<b>Departemen dengan Gangguan Terbanyak</b>",
+
+        if (
+            col_clean in [
+                "department",
+                "dept",
+                "nama department",
+                "nama dept",
+                "department name",
+                "dept name",
+            ]
+            or "department" in col_clean
+        ):
+            dept_col = col
+            break
+
+    if dept_col is None:
+        st.info("Kolom department tidak ditemukan.")
+        return
+
+    # ============================================================
+    # HITUNG JUMLAH TICKET PER DEPARTMENT
+    # ============================================================
+
+    dept_summary = (
+        df
+        .dropna(subset=[dept_col])
+        .assign(
+            department_display=lambda x: (
+                x[dept_col]
+                .astype(str)
+                .str.strip()
+            )
         )
+        .groupby("department_display")
+        .size()
+        .reset_index(name="Jumlah Gangguan")
+    )
+
+    if dept_summary.empty:
+        st.info("Tidak ada data department.")
+        return
+
+    # ============================================================
+    # SORTING
+    # ============================================================
+
+    sort_key = f"{key_prefix}_dept_sort"
+
+    sort_option = st.radio(
+        "Urutan Data:",
+        ["Terbanyak", "Tersedikit"],
+        horizontal=True,
+        key=sort_key
+    )
+
+    if sort_option == "Terbanyak":
+        dept_summary = dept_summary.sort_values(
+            "Jumlah Gangguan",
+            ascending=False
+        )
+    else:
+        dept_summary = dept_summary.sort_values(
+            "Jumlah Gangguan",
+            ascending=True
+        )
+
+    # ============================================================
+    # TOP 10
+    # ============================================================
+
+    dept_summary = dept_summary.head(10)
+
+    # Untuk chart:
+    # department dengan jumlah terbesar berada di bagian atas
+    chart_data = dept_summary.sort_values(
+        "Jumlah Gangguan",
+        ascending=True
+    )
+
+    # ============================================================
+    # BUAT HORIZONTAL BAR CHART
+    # ============================================================
+
+    fig = px.bar(
+        chart_data,
+        x="Jumlah Gangguan",
+        y="department_display",
+        orientation="h",
+        text="Jumlah Gangguan"
+    )
 
     fig.update_traces(
-        hovertemplate="<b>%{label}</b><br>Jumlah Kasus: %{value}<extra></extra>",
-        tiling=dict(orientation="h"),
-        root_color="lightgrey",
+        textposition="outside",
+        hovertemplate=(
+            "<b>%{y}</b><br>"
+            "Jumlah Gangguan: %{x:,}"
+            "<extra></extra>"
+        )
     )
-    fig.update_layout(
-        height=300,
-        margin=dict(t=40, l=10, r=10, b=10),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-    )
-    return fig
 
+    fig.update_layout(
+        height=420,
+        xaxis_title="Jumlah Gangguan",
+        yaxis_title="",
+        showlegend=False,
+        margin=dict(
+            l=10,
+            r=40,
+            t=20,
+            b=20
+        )
+    )
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )
 
 def chart_layanan_treemap(df):
     """Treemap: Layanan dengan Tiket Terbanyak"""
@@ -529,8 +757,8 @@ def chart_peringkat_penyelesaian(df):
         return fig
     return None
 
-
 def chart_waktu_penyelesaian(df):
+
     """Bar Chart Distribusi Durasi Waktu Penyelesaian Tiket (Resolution Time)"""
     if df is None or df.empty or "resolution_time_group" not in df.columns:
         return None
@@ -563,3 +791,422 @@ def chart_waktu_penyelesaian(df):
     )
     fig.update_xaxes(showgrid=True, gridcolor="#F0F0F0")
     return fig
+
+def get_avg_response(df):
+
+    response_col = find_column(
+        df,
+        [
+            "response_minutes",
+            "response_time",
+            "response time",
+            "waktu respon",
+            "avg_response_time",
+            "first_response_minutes"
+        ]
+    )
+
+    if response_col is None:
+        return None
+
+    values = pd.to_numeric(
+        df[response_col],
+        errors="coerce"
+    )
+
+    values = values[
+        values.notna() &
+        (values >= 0)
+    ]
+
+    if values.empty:
+        return None
+
+    return values.mean()
+
+def get_sla_achievement(df):
+
+    sla_col = find_column(
+        df,
+        [
+            "sla_status",
+            "SLA_Status",
+            "sla_status_name"
+        ]
+    )
+
+    if sla_col is None:
+        return None
+
+    sla = (
+        df[sla_col]
+        .astype(str)
+        .str.strip()
+        .str.lower()
+    )
+
+    valid = sla.isin([
+        "breach",
+        "comply"
+    ])
+
+    if valid.sum() == 0:
+        return None
+
+    comply = (sla == "comply").sum()
+
+    return comply / valid.sum() * 100
+
+def render_problem_table(df):
+
+
+    desc_col = find_column(
+        df,
+        [
+            "ticket_symptom",
+            "problem description",
+            "description",
+            "deskripsi permasalahan",
+            "detailSubCategory",
+            "subcategory",
+            "subCategory",
+            "category_split_2"
+        ]
+    )
+
+    if desc_col is None:
+        return
+
+    summary = (
+        df[desc_col]
+        .dropna()
+        .astype(str)
+        .str.strip()
+        .value_counts()
+        .head(10)
+        .reset_index()
+    )
+
+    summary.columns = [
+        "Deskripsi Permasalahan",
+        "Jumlah Kasus"
+    ]
+
+    st.markdown(
+        "### Deskripsi Permasalahan"
+    )
+
+    st.dataframe(
+        summary,
+        use_container_width=True,
+        hide_index=True,
+        height=250
+    )
+
+def find_column(df, candidates):
+
+    """
+    Mencari kolom pertama yang cocok berdasarkan nama kolom.
+    Bisa menerima nama persis maupun variasi underscore/spasi.
+    """
+    if df is None or df.empty:
+        return None
+
+    normalized = {}
+
+    for col in df.columns:
+        key = (
+            str(col)
+            .strip()
+            .lower()
+            .replace("_", " ")
+            .replace("-", " ")
+        )
+        normalized[key] = col
+
+    for candidate in candidates:
+
+        key = (
+            str(candidate)
+            .strip()
+            .lower()
+            .replace("_", " ")
+            .replace("-", " ")
+        )
+
+        if key in normalized:
+            return normalized[key]
+
+    return None
+
+def chart_pending_member(df):
+    """
+    Bar chart Top 3 anggota dengan tiket pending terbanyak.
+    """
+
+    if df is None or df.empty:
+        return None
+
+    # Cari kolom anggota
+    member_col = None
+
+    possible_columns = [
+        "member",
+        "member_name",
+        "nama_member",
+        "nama anggota",
+        "anggota",
+        "agent",
+        "agent_name",
+        "technician",
+        "technician_name",
+        "nama teknisi",
+        "teknisi",
+        "assignee",
+        "assigned_to",
+        "assigned_name",
+        "pic",
+        "pic_name",
+        "updated_by_name",
+    ]
+
+    for col in df.columns:
+
+        clean = (
+            str(col)
+            .strip()
+            .lower()
+            .replace("_", " ")
+            .replace("-", " ")
+        )
+
+        if clean in [
+            x.replace("_", " ")
+            for x in possible_columns
+        ]:
+            member_col = col
+            break
+
+    if member_col is None:
+        return None
+
+    # Tentukan tiket pending
+    if "date_pending" in df.columns:
+
+        pending_mask = df["date_pending"].notna()
+
+    elif "pending_status" in df.columns:
+
+        pending_mask = (
+            df["pending_status"]
+            .astype(str)
+            .str.strip()
+            .str.lower()
+            .eq("pending")
+        )
+
+    else:
+
+        status_col = None
+
+        for col in [
+            "ticket_status_name",
+            "ticket_status",
+            "status",
+        ]:
+            if col in df.columns:
+                status_col = col
+                break
+
+        if status_col is None:
+            return None
+
+        pending_mask = (
+            df[status_col]
+            .astype(str)
+            .str.strip()
+            .str.lower()
+            .str.contains(
+                "pending|open|waiting",
+                na=False,
+            )
+        )
+
+    temp = df.loc[
+        pending_mask
+    ].copy()
+
+    if temp.empty:
+        return None
+
+    temp[member_col] = (
+        temp[member_col]
+        .astype(str)
+        .str.strip()
+    )
+
+    temp = temp[
+        ~temp[member_col]
+        .str.lower()
+        .isin([
+            "",
+            "nan",
+            "none",
+            "null",
+            "-",
+        ])
+    ]
+
+    if temp.empty:
+        return None
+
+    # Hitung pending per anggota
+    member_count = (
+        temp[member_col]
+        .value_counts()
+        .reset_index()
+    )
+
+    member_count.columns = [
+        "Anggota",
+        "Jumlah",
+    ]
+
+    # TOP 3
+    member_count = (
+        member_count
+        .sort_values(
+            "Jumlah",
+            ascending=False,
+        )
+        .head(3)
+        .sort_values(
+            "Jumlah",
+            ascending=True,
+        )
+    )
+
+    if member_count.empty:
+        return None
+
+    fig = px.bar(
+        member_count,
+        x="Jumlah",
+        y="Anggota",
+        orientation="h",
+        text="Jumlah",
+    )
+
+    fig.update_traces(
+        textposition="outside",
+        cliponaxis=False,
+    )
+
+    fig.update_layout(
+        xaxis_title=None,
+        yaxis_title=None,
+        showlegend=False,
+        height=400,
+        margin=dict(
+            l=10,
+            r=30,
+            t=55,
+            b=20,
+        ),
+    )
+
+    return fig
+
+def chart_tingkat_dampak_bar(df):
+    """
+    Horizontal bar chart TOP 3 Tingkat Dampak.
+    """
+
+    if df is None or df.empty:
+        return None
+
+    impact_col = find_column(
+        df,
+        [
+            "impact",
+            "impact_name",
+            "impact_level",
+            "dampak",
+            "tingkat_dampak",
+        ]
+    )
+
+    if impact_col is None:
+        return None
+
+    impact_count = (
+        df[impact_col]
+        .dropna()
+        .astype(str)
+        .str.strip()
+        .value_counts()
+        .head(3)
+    )
+
+    if impact_count.empty:
+        return None
+
+    # Terbesar tampil paling atas
+    impact_count = impact_count.sort_values(
+        ascending=True
+    )
+
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Bar(
+            x=impact_count.values,
+            y=impact_count.index,
+            orientation="h",
+            text=impact_count.values,
+            textposition="outside",
+            marker=dict(
+                color="#22c55e"
+            ),
+            hovertemplate=(
+                "<b>%{y}</b><br>"
+                "Jumlah Tiket: %{x}"
+                "<extra></extra>"
+            )
+        )
+    )
+
+    fig.update_layout(
+        height=170,
+
+        margin=dict(
+            l=55,
+            r=35,
+            t=10,
+            b=25
+        ),
+
+        xaxis=dict(
+            title=None,
+            showgrid=True,
+            zeroline=False,
+        ),
+
+        yaxis=dict(
+            title=None,
+            showgrid=False,
+            zeroline=False,
+            categoryorder="total ascending",
+        ),
+
+        showlegend=False,
+
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+
+        bargap=0.35,
+    )
+
+    return fig
+
+
