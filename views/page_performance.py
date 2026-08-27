@@ -638,7 +638,7 @@ def render(df_raw):
         render_kpi_card(
             "Rata-rata MTTR",
             (
-                f"{avg_mttr:,.2f}"
+                f"{avg_mttr:,.0f}"
                 if avg_mttr is not None
                 else "N/A"
             ),
@@ -843,7 +843,7 @@ def render(df_raw):
         render_kpi_card(
             "Rata-rata Waktu Respon",
             (
-                f"{avg_response:,.2f}"
+                f"{avg_response:,.0f}"
                 if avg_response is not None
                 else "N/A"
             ),

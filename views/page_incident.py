@@ -194,28 +194,35 @@ def render(df_classified):
         # ------------------------------------------------------------
         with c3:
 
-            fig_cal = calendar_heatmap(df_filtered)
+            fig_cal = calendar_heatmap(
+                df_filtered
+            )
 
             if fig_cal is not None:
 
                 fig_cal.update_layout(
-                    height=300,
+                    height=350,
                     margin=dict(
-                        l=35,
-                        r=10,
-                        t=35,
-                        b=25
+                        l=55,
+                        r=15,
+                        t=75,
+                        b=30
                     )
                 )
 
                 st.plotly_chart(
                     fig_cal,
                     use_container_width=True,
-                    config={"displayModeBar": False}
+                    config={
+                        "displayModeBar": False
+                    }
                 )
 
             else:
-                st.info("Data kalender tidak tersedia.")
+
+                st.info(
+                    "Data kalender tidak tersedia."
+                )
 
         st.markdown("<br>", unsafe_allow_html=True)
 
