@@ -63,7 +63,7 @@ def render_sidebar():
     # ============================================================
     st.sidebar.subheader("📤 Upload Data Raw")
     allowed_types = ["csv", "xlsx", "xls", "xlsm", "xlsb", "tsv", "json", "txt"]
-    uploaded_file = st.sidebar.file_uploader("Upload File Tiket", type=allowed_types)
+    uploaded_file = st.sidebar.file_uploader("Upload File Tiket", type=allowed_types, accept_multiple_files=True )
 
     # ============================================================
     # 3. PROSES FILE
@@ -74,24 +74,62 @@ def render_sidebar():
     #      file yang sama pernah diproses sebelumnya (mis. setelah reset app),
     #      hasilnya diambil dari cache tanpa hitung ulang.
     # ============================================================
-    if uploaded_file is not None:
-        file_id = f"{uploaded_file.name}_{uploaded_file.size}"
 
-        if st.session_state.get("current_file_id") != file_id:
-            try:
-                with st.spinner("🧹 Membersihkan data & menghitung KPI..."):
-                    file_bytes = uploaded_file.getvalue()
-                    df_final = _process_uploaded_file(file_bytes, uploaded_file.name)
+    # Maksimal 10 file
+    if len(uploaded_file) > 10:
+        st.sidebar.error("❌ Maksimal 10 file dapat di-upload sekaligus.")
+        st.stop()
 
-                if df_final is not None:
-                    st.session_state["df_raw"] = df_final
-                    st.session_state["current_file_id"] = file_id
-                    st.session_state["uploaded_file_name"] = uploaded_file.name
-                else:
-                    st.sidebar.error("❌ File kosong atau format tidak didukung.")
+    # ID gabungan dari semua file
+    file_id = "_".join(
+        f"{f.name}_{f.size}"
+        for f in uploaded_file
+    )
 
-            except Exception as e:
-                st.sidebar.error(f"❌ Gagal memproses file:\n{e}")
+    if st.session_state.get("current_file_id") != file_id:
+
+        try:
+            processed_dfs = []
+
+            with st.spinner(
+                f"🧹 Memproses {len(uploaded_file)} file..."
+            ):
+
+                for file in uploaded_file:
+
+                    file_bytes = file.getvalue()
+
+                    df_processed = _process_uploaded_file(
+                        file_bytes,
+                        file.name
+                    )
+
+                    if df_processed is not None:
+                        processed_dfs.append(df_processed)
+
+            if processed_dfs:
+
+                # Gabungkan semua file
+                df_final = pd.concat(
+                    processed_dfs,
+                    ignore_index=True
+                )
+
+                st.session_state["df_raw"] = df_final
+                st.session_state["current_file_id"] = file_id
+                st.session_state["uploaded_file_name"] = ", ".join(
+                    f.name for f in uploaded_file
+                )
+
+            else:
+                st.sidebar.error(
+                    "❌ Tidak ada file yang berhasil diproses."
+                )
+
+        except Exception as e:
+            st.sidebar.error(
+                f"❌ Gagal memproses file:\n{e}"
+            )
 
     # ============================================================
     # 4. AMBIL DATA DARI SESSION STATE & TAMPILKAN STATUS
