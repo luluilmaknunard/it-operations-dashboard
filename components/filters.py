@@ -4,31 +4,34 @@ import pandas as pd
 
 def render_top_filters(df, key_prefix="default"):
     """
-    Filter cascading:
+    GLOBAL CASCADING FILTER
 
-    Bulan
-       ↓
-    Unit Name
-       ↓
-    Nama Department
-       ↓
-    Nama Layanan
+    Filter:
+        Bulan
+           ↓
+        Unit Name
+           ↓
+        Nama Department
+           ↓
+        Nama Layanan
+
+    Semua pilihan filter disimpan di st.session_state dengan key GLOBAL,
+    sehingga pilihan user tetap berlaku ketika berpindah halaman.
+
+    Global session state:
+        global_f_month
+        global_f_unit
+        global_f_dept
+        global_f_service
 
     Behavior:
-    - Jika Unit = All      → data seluruh unit
-    - Jika Unit dipilih    → seluruh data fokus ke unit tersebut
-    - Department mengikuti Unit
-    - Service mengikuti Unit + Department
-    - Bulan membatasi seluruh filter berikutnya
-
-    Metadata pilihan filter disimpan di:
-        filtered_df.attrs["selected_month"]
-        filtered_df.attrs["selected_unit"]
-        filtered_df.attrs["selected_dept"]
-        filtered_df.attrs["selected_service"]
-
-    Ini bisa digunakan oleh metrics.py untuk membedakan
-    MTTR keseluruhan dengan MTTR unit tertentu.
+    - Filter yang dipilih di halaman A akan tetap aktif di halaman B.
+    - Unit mengikuti Bulan.
+    - Department mengikuti Bulan + Unit.
+    - Service mengikuti Bulan + Unit + Department.
+    - Jika pilihan global tidak tersedia pada subset halaman tertentu,
+      pilihan tetap dipertahankan dan dataframe halaman tersebut bisa
+      menghasilkan 0 baris.
     """
 
     # ============================================================
@@ -41,7 +44,35 @@ def render_top_filters(df, key_prefix="default"):
     df_working = df.copy()
 
     # ============================================================
-    # 1. HELPER CARI KOLOM
+    # 1. KEY GLOBAL
+    #
+    # Jangan gunakan key_prefix untuk widget state.
+    # Semua halaman menggunakan state yang sama.
+    # ============================================================
+
+    month_key = "global_f_month"
+    unit_key = "global_f_unit"
+    dept_key = "global_f_dept"
+    service_key = "global_f_service"
+
+    # ============================================================
+    # 2. DEFAULT SESSION STATE
+    # ============================================================
+
+    if month_key not in st.session_state:
+        st.session_state[month_key] = "All"
+
+    if unit_key not in st.session_state:
+        st.session_state[unit_key] = "All"
+
+    if dept_key not in st.session_state:
+        st.session_state[dept_key] = "All"
+
+    if service_key not in st.session_state:
+        st.session_state[service_key] = "All"
+
+    # ============================================================
+    # 3. HELPER CARI KOLOM
     # ============================================================
 
     def find_column(possible_names):
@@ -66,7 +97,7 @@ def render_top_filters(df, key_prefix="default"):
         return None
 
     # ============================================================
-    # 2. CARI KOLOM UTAMA
+    # 4. CARI KOLOM UTAMA
     # ============================================================
 
     service_col = find_column([
@@ -91,15 +122,17 @@ def render_top_filters(df, key_prefix="default"):
     ])
 
     # ============================================================
-    # 3. CARI KOLOM TANGGAL
+    # 5. CARI KOLOM TANGGAL
     # ============================================================
 
     date_col = None
 
     if "date_created_at" in df_working.columns:
+
         date_col = "date_created_at"
 
     elif "Date" in df_working.columns:
+
         date_col = "Date"
 
     else:
@@ -118,11 +151,12 @@ def render_top_filters(df, key_prefix="default"):
                 "tanggal",
                 "date"
             ]:
+
                 date_col = col
                 break
 
     # ============================================================
-    # 4. PREPARE DATETIME
+    # 6. PREPARE DATETIME
     # ============================================================
 
     if date_col is not None:
@@ -137,7 +171,9 @@ def render_top_filters(df, key_prefix="default"):
 
         else:
 
-            # Percobaan pertama
+            # Format utama:
+            # DD.MM.YYYY HH:MM:SS
+
             df_working["datetime_filter"] = pd.to_datetime(
                 df_working[date_col],
                 format="%d.%m.%Y %H:%M:%S",
@@ -145,6 +181,7 @@ def render_top_filters(df, key_prefix="default"):
             )
 
             # Fallback format lain
+
             null_mask = (
                 df_working["datetime_filter"].isna()
             )
@@ -162,6 +199,10 @@ def render_top_filters(df, key_prefix="default"):
                     dayfirst=True,
                     errors="coerce"
                 )
+
+        # ========================================================
+        # BUAT LABEL BULAN
+        # ========================================================
 
         df_working["month_filter_name"] = (
             df_working["datetime_filter"]
@@ -197,31 +238,27 @@ def render_top_filters(df, key_prefix="default"):
         month_list = ["All"]
 
     # ============================================================
-    # 5. KEY WIDGET
-    # ============================================================
-
-    month_key = f"{key_prefix}_f_month"
-    unit_key = f"{key_prefix}_f_unit"
-    dept_key = f"{key_prefix}_f_dept"
-    service_key = f"{key_prefix}_f_service"
-
-    # ============================================================
-    # 6. LAYOUT FILTER
+    # 7. LAYOUT FILTER
     # ============================================================
 
     col_f1, col_f2, col_f3, col_f4 = st.columns(4)
 
     # ============================================================
-    # 7. FILTER BULAN
+    # 8. BULAN
     # ============================================================
 
-    with col_f1:
+    selected_month = st.session_state[month_key]
 
-        if (
-            month_key in st.session_state
-            and st.session_state[month_key] not in month_list
-        ):
-            st.session_state[month_key] = "All"
+    # Pastikan pilihan global tetap ada di options.
+    # Ini penting ketika pindah ke halaman yang subset datanya berbeda.
+
+    if (
+        selected_month != "All"
+        and selected_month not in month_list
+    ):
+        month_list.append(selected_month)
+
+    with col_f1:
 
         selected_month = st.selectbox(
             "Bulan",
@@ -230,7 +267,7 @@ def render_top_filters(df, key_prefix="default"):
         )
 
     # ============================================================
-    # 8. DATASET SETELAH BULAN
+    # 9. DATASET SETELAH BULAN
     # ============================================================
 
     df_after_month = df_working.copy()
@@ -246,9 +283,9 @@ def render_top_filters(df, key_prefix="default"):
         ].copy()
 
     # ============================================================
-    # 9. UNIT NAME
+    # 10. UNIT NAME
     #
-    # UNIT SEKARANG MENGIKUTI BULAN
+    # UNIT MENGIKUTI BULAN
     # ============================================================
 
     if unit_col is not None:
@@ -282,12 +319,16 @@ def render_top_filters(df, key_prefix="default"):
 
         unit_list = ["All"]
 
-    # Reset state jika unit sudah tidak tersedia
+    # Jangan hapus pilihan global hanya karena halaman
+    # tertentu tidak memiliki unit tersebut.
+
+    selected_unit = st.session_state[unit_key]
+
     if (
-        unit_key in st.session_state
-        and st.session_state[unit_key] not in unit_list
+        selected_unit != "All"
+        and selected_unit not in unit_list
     ):
-        st.session_state[unit_key] = "All"
+        unit_list.append(selected_unit)
 
     with col_f4:
 
@@ -298,7 +339,7 @@ def render_top_filters(df, key_prefix="default"):
         )
 
     # ============================================================
-    # 10. DATASET SETELAH UNIT
+    # 11. DATASET SETELAH UNIT
     # ============================================================
 
     df_after_unit = df_after_month.copy()
@@ -316,7 +357,7 @@ def render_top_filters(df, key_prefix="default"):
         ].copy()
 
     # ============================================================
-    # 11. DEPARTMENT
+    # 12. DEPARTMENT
     #
     # DEPARTMENT MENGIKUTI:
     # BULAN + UNIT
@@ -353,12 +394,15 @@ def render_top_filters(df, key_prefix="default"):
 
         department_list = ["All"]
 
-    # Reset state jika department tidak tersedia
+    # Pertahankan pilihan department global
+
+    selected_dept = st.session_state[dept_key]
+
     if (
-        dept_key in st.session_state
-        and st.session_state[dept_key] not in department_list
+        selected_dept != "All"
+        and selected_dept not in department_list
     ):
-        st.session_state[dept_key] = "All"
+        department_list.append(selected_dept)
 
     with col_f3:
 
@@ -369,7 +413,7 @@ def render_top_filters(df, key_prefix="default"):
         )
 
     # ============================================================
-    # 12. DATASET SETELAH DEPARTMENT
+    # 13. DATASET SETELAH DEPARTMENT
     # ============================================================
 
     df_after_dept = df_after_unit.copy()
@@ -387,7 +431,7 @@ def render_top_filters(df, key_prefix="default"):
         ].copy()
 
     # ============================================================
-    # 13. SERVICE / NAMA LAYANAN
+    # 14. SERVICE / NAMA LAYANAN
     #
     # SERVICE MENGIKUTI:
     # BULAN + UNIT + DEPARTMENT
@@ -424,12 +468,15 @@ def render_top_filters(df, key_prefix="default"):
 
         service_list = ["All"]
 
-    # Reset state jika service tidak tersedia
+    # Pertahankan pilihan service global
+
+    selected_service = st.session_state[service_key]
+
     if (
-        service_key in st.session_state
-        and st.session_state[service_key] not in service_list
+        selected_service != "All"
+        and selected_service not in service_list
     ):
-        st.session_state[service_key] = "All"
+        service_list.append(selected_service)
 
     with col_f2:
 
@@ -440,7 +487,7 @@ def render_top_filters(df, key_prefix="default"):
         )
 
     # ============================================================
-    # 14. FINAL FILTER
+    # 15. FINAL FILTER
     # ============================================================
 
     filtered_df = df_working.copy()
@@ -508,10 +555,7 @@ def render_top_filters(df, key_prefix="default"):
         ].copy()
 
     # ============================================================
-    # 15. SIMPAN INFORMASI FILTER
-    #
-    # Digunakan metrics.py / page overview
-    # untuk mengetahui apakah user memilih Unit tertentu.
+    # 16. SIMPAN METADATA FILTER
     # ============================================================
 
     filtered_df.attrs["selected_month"] = selected_month
@@ -532,7 +576,7 @@ def render_top_filters(df, key_prefix="default"):
     )
 
     # ============================================================
-    # 16. HAPUS KOLOM BANTU
+    # 17. HAPUS KOLOM BANTU
     # ============================================================
 
     cols_to_drop = [
@@ -555,7 +599,7 @@ def render_top_filters(df, key_prefix="default"):
         )
 
     # ============================================================
-    # 17. PERTAHANKAN METADATA SETELAH DROP/COPY
+    # 18. PERTAHANKAN METADATA SETELAH DROP
     # ============================================================
 
     filtered_df.attrs["selected_month"] = selected_month
@@ -576,5 +620,4 @@ def render_top_filters(df, key_prefix="default"):
     )
 
     return filtered_df
-
 
