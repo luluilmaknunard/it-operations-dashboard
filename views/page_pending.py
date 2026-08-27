@@ -269,6 +269,10 @@ def _get_average_response(df):
     response_col = _find_column(
         df,
         [
+            # NAMA KOLOM ASLI DATA KAMU
+            "response_time_minutes",
+
+            # ALTERNATIF NAMA
             "response_minutes",
             "response_time",
             "response time",
@@ -309,6 +313,10 @@ def _get_average_mttr(df):
     resolution_col = _find_column(
         df,
         [
+
+            "resolution_time_minutes",
+
+
             "resolution_minutes",
             "resolution_time",
             "mttr",
@@ -337,7 +345,7 @@ def _get_average_mttr(df):
 
 
 # ==============================================================================
-# KPI - OUTSIDE SLA
+# KPI - DILUAR SLA
 # ==============================================================================
 
 def _get_outside_sla_count(df):
@@ -447,8 +455,6 @@ def _chart_gangguan_kategori(df):
         .apply(normalize_category)
     )
 
-    # Gabungkan apabila setelah normalisasi
-    # terdapat kategori yang sama
     data = (
         data
         .groupby("Kategori", as_index=False)["Jumlah"]
@@ -476,11 +482,13 @@ def _chart_gangguan_kategori(df):
     fig.update_layout(
         margin=dict(
             l=10,
-            r=35,
-            t=10,
+            r=10,
+            t=40,
             b=10,
         ),
         height=230,
+        paper_bgcolor="white",
+        plot_bgcolor="white",
         xaxis_title=None,
         yaxis_title=None,
         showlegend=False,
@@ -777,10 +785,6 @@ def render(df_raw):
 
     with col_c:
 
-        st.markdown(
-            "##### **Distribusi Waktu Penyelesaian**"
-        )
-
         fig = chart_waktu_penyelesaian(
             df_pending
         )
@@ -818,7 +822,7 @@ def render(df_raw):
         )
 
         # ======================================================================
-        # OUTSIDE SLA
+        # DILUAR SLA
         # ======================================================================
 
         st.metric(
@@ -841,7 +845,7 @@ def render(df_raw):
             response_display = "-"
 
         st.metric(
-            "Rata-rata Waktu Respons ⭐",
+            "AVG Waktu Respons ⭐",
             response_display,
         )
 
@@ -971,15 +975,6 @@ def render(df_raw):
     # --------------------------------------------------------------------------
 
     with col_table:
-
-        st.markdown(
-            "##### **Detail Tiket Pending**"
-        )
-
-        st.caption(
-            f"Menampilkan {total_pending:,} tiket "
-            "yang saat ini masuk kategori pending."
-        )
 
         render_problem_table(
             df_pending

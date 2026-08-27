@@ -310,13 +310,7 @@ def chart_distribusi_jenis(df):
     fig.update_layout(
         height=280,
         showlegend=False,
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=-0.2,
-            xanchor="center",
-            x=0.5,
-        ),
+        paper_bgcolor="white",
         margin=dict(
             l=10,
             r=10,
@@ -397,13 +391,7 @@ def chart_tingkat_dampak_pie(df):
     fig.update_layout(
         height=280,
         showlegend=False,
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=-0.2,
-            xanchor="center",
-            x=0.5,
-        ),
+        paper_bgcolor="white",
         margin=dict(
             l=10,
             r=10,
@@ -628,7 +616,6 @@ def chart_trend_harian_multi(df):
             )
 
     fig.update_layout(
-        title="<b>Tren Jumlah Tiket Harian</b>",
         height=280,
         margin=dict(
             l=10,
@@ -639,13 +626,7 @@ def chart_trend_harian_multi(df):
         xaxis_title="Hari Ke-",
         yaxis_title="Jumlah Tiket",
         plot_bgcolor="white",
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=-0.35,
-            xanchor="center",
-            x=0.5,
-        ),
+        paper_bgcolor="white",
         hovermode="x unified",
     )
 
@@ -1157,6 +1138,7 @@ def chart_kategori_horizontal(df):
         xaxis_title="Jumlah Kasus",
         yaxis_title="",
         plot_bgcolor="white",
+        paper_bgcolor="white",
     )
 
     fig.update_xaxes(
@@ -1263,8 +1245,8 @@ def chart_subkategori_bar(
             b=10,
         ),
         height=280,
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="white",
+        plot_bgcolor="white",
         font=dict(size=11),
         title=dict(
             x=0.5,
@@ -1462,6 +1444,8 @@ def chart_department(
         xaxis_title="Jumlah Gangguan",
         yaxis_title="",
         showlegend=False,
+        paper_bgcolor="white",
+        plot_bgcolor="white",
         margin=dict(
             l=10,
             r=40,
@@ -1598,7 +1582,7 @@ def chart_layanan_treemap(df):
             r=10,
             b=10,
         ),
-        paper_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="white",
         plot_bgcolor="rgba(0,0,0,0)",
     )
 
@@ -1886,13 +1870,14 @@ def chart_peringkat_penyelesaian(df):
         height=380,
         margin=dict(
             l=10,
-            r=30,
-            t=35,
+            r=10,
+            t=40,
             b=10,
         ),
         xaxis_title="Jumlah Tiket",
         yaxis_title="",
         plot_bgcolor="white",
+        paper_bgcolor="white",
     )
 
     fig.update_xaxes(
@@ -1978,13 +1963,14 @@ def chart_waktu_penyelesaian(df):
         height=260,
         margin=dict(
             l=10,
-            r=30,
-            t=35,
+            r=10,
+            t=40,
             b=10,
         ),
         xaxis_title="Jumlah Tiket",
         yaxis_title="",
         plot_bgcolor="white",
+        paper_bgcolor="white",
     )
 
     fig.update_xaxes(
@@ -2343,6 +2329,7 @@ def chart_pending_member(df):
         xaxis_title=None,
         yaxis_title=None,
         showlegend=False,
+        paper_bgcolor="white",
         height=400,
         margin=dict(
             l=10,
@@ -2424,10 +2411,10 @@ def chart_tingkat_dampak_bar(df):
         height=170,
 
         margin=dict(
-            l=55,
-            r=35,
-            t=10,
-            b=25,
+            l=10,
+            r=10,
+            t=40,
+            b=10,
         ),
 
         xaxis=dict(

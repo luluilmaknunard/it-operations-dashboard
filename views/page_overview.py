@@ -207,7 +207,9 @@ def render(df_raw):
                         t=10,
                         b=10
                     ),
-                    height=230
+                    height=230,
+                    paper_bgcolor="white",
+                    plot_bgcolor="white",
                 )
 
                 st.plotly_chart(
@@ -366,14 +368,8 @@ def render(df_raw):
                         b=10
                     ),
                     height=230,
-
-                    legend=dict(
-                        orientation="h",
-                        yanchor="top",
-                        y=-0.2,
-                        xanchor="center",
-                        x=0.5
-                    ),
+                    paper_bgcolor="white",
+                    plot_bgcolor="white",
 
                     xaxis_title=None,
                     yaxis_title="Jumlah",
@@ -476,6 +472,8 @@ def render(df_raw):
                         b=10
                     ),
                     height=230,
+                    paper_bgcolor="white",
+                    plot_bgcolor="white",
                     xaxis_title=None,
                     yaxis_title=None
                 )
@@ -569,7 +567,9 @@ def render(df_raw):
                         t=10,
                         b=10
                     ),
-                    height=230
+                    height=230,
+                    paper_bgcolor="white",
+                    plot_bgcolor="white",
                 )
 
                 st.plotly_chart(
@@ -715,6 +715,7 @@ def render(df_raw):
 
                 fig_tree.update_layout(
                     autosize=True,
+                    paper_bgcolor="white",
                     height=420,
                     margin=dict(
                         l=5,
