@@ -91,11 +91,11 @@ def safe_render(module, df, page_name):
         st.error(f"❌ Error: Fungsi `render(df_raw)` tidak ditemukan di file `views/{page_name}.py`!")
 
 # 8. Routing Halaman (Langsung kirim df_raw)
-if menu == "🏠 Executive Overview":
+if menu == "Executive Overview":
     safe_render(page_overview, df_raw, "page_overview")
-elif menu == "🚨 Incident Analytics":
+elif menu == "Incident Analytics":
     safe_render(page_incident, df_raw, "page_incident")
-elif menu == "⚡ IT Performance & SLA":
+elif menu == "IT Performance & SLA":
     safe_render(page_performance, df_raw, "page_performance")
-elif menu == "🔍 Pending Investigation":
+elif menu == "Pending Investigation":
     safe_render(page_pending, df_raw, "page_pending")
