@@ -49,10 +49,10 @@ def render_sidebar():
     menu = st.sidebar.radio(
         "Menu Navigasi",
         [
-            "🏠 Executive Overview",
-            "🚨 Incident Analytics",
-            "⚡ IT Performance & SLA",
-            "🔍 Pending Investigation",
+            "Executive Overview",
+            "Incident Analytics",
+            "IT Performance & SLA",
+            "Pending Investigation",
         ],
     )
 
