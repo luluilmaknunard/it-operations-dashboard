@@ -151,33 +151,18 @@ def render(df_classified):
         # ========================================================
         # TIKET PENDING
         # ========================================================
-        pending_count = 0
+        # Rule:
+        # Jika date_pending terisi -> tiket dihitung sebagai Pending
+        # Jika date_pending kosong -> bukan Pending
 
-        if "pending_status" in df_filtered.columns:
+        if "is_pending" in df_filtered.columns:
+            pending_count = int(df_filtered["is_pending"].sum())
 
-            pending_count = int(
-                (
-                    df_filtered["pending_status"]
-                    .astype(str)
-                    .str.strip()
-                    .str.lower()
-                    == "pending"
-                ).sum()
-            )
+        elif "date_pending" in df_filtered.columns:
+            pending_count = int(df_filtered["date_pending"].notna().sum())
 
-        elif "ticket_status_name" in df_filtered.columns:
-
-            pending_count = int(
-                df_filtered[
-                    df_filtered["ticket_status_name"]
-                    .astype(str)
-                    .str.lower()
-                    .str.contains(
-                        "pending|open|waiting",
-                        na=False
-                    )
-                ].shape[0]
-            )
+        else:
+            pending_count = 0
 
         st.markdown(
             f"""

@@ -83,120 +83,121 @@ def transform_data_and_kpi(df: pd.DataFrame) -> pd.DataFrame:
                 dayfirst=True
         )
 
-  # =========================================================================
+
+    # =========================================================================
     # 3. HITUNG MTTR
     # =========================================================================
     #
-    # RUMUS:
+    # PENENTUAN PENDING:
+    #   Jika date_pending terisi -> tiket dianggap PENDING
+    #   Jika date_pending kosong -> tiket dianggap NON-PENDING
     #
     # NON-PENDING:
-    #     date_last_update - date_assigned
+    #   MTTR = date_last_update - date_assigned
     #
     # PENDING:
-    #     (date_last_update - date_assigned)
-    #     - (date_last_update - date_pending)
+    #   MTTR = date_pending - date_assigned
     #
-    # Secara matematis:
-    #     = date_pending - date_assigned
-    #
-    # MTTR dihitung PER TIKET terlebih dahulu.
-    # Setelah itu rata-rata MTTR dihitung dari kolom mttr_minutes.
     # =========================================================================
 
-    df_transformed['mttr_non_pending_minutes'] = np.nan
-    df_transformed['mttr_pending_minutes'] = np.nan
-    df_transformed['mttr_minutes'] = np.nan
+    df_transformed["mttr_non_pending_minutes"] = np.nan
+    df_transformed["mttr_pending_minutes"] = np.nan
+    df_transformed["mttr_minutes"] = np.nan
+
+    # -------------------------------------------------------------------------
+    # Tentukan status Pending berdasarkan date_pending
+    # -------------------------------------------------------------------------
+    if "date_pending" in df_transformed.columns:
+
+        # Pastikan date_pending sudah benar-benar datetime
+        df_transformed["date_pending"] = pd.to_datetime(
+            df_transformed["date_pending"],
+            errors="coerce",
+            dayfirst=True
+        )
+
+        # TRUE  = Pending
+        # FALSE = Non-Pending
+        df_transformed["is_pending"] = df_transformed["date_pending"].notna()
+
+    else:
+
+        # Kalau kolom date_pending tidak ada,
+        # semua tiket dianggap non-pending
+        df_transformed["is_pending"] = False
 
     required_mttr_cols = {
-        'date_assigned',
-        'date_last_update'
+        "date_assigned",
+        "date_last_update"
     }
 
     if required_mttr_cols.issubset(df_transformed.columns):
 
-        # ---------------------------------------------------------
+        # =====================================================================
         # MTTR NON-PENDING
         # date_last_update - date_assigned
-        # ---------------------------------------------------------
+        # =====================================================================
 
         durasi_non_pending = (
-            df_transformed['date_last_update']
-            - df_transformed['date_assigned']
+            df_transformed["date_last_update"]
+            - df_transformed["date_assigned"]
         ).dt.total_seconds() / 60
 
-        df_transformed['mttr_non_pending_minutes'] = (
+        df_transformed["mttr_non_pending_minutes"] = (
             durasi_non_pending.where(durasi_non_pending >= 0)
         )
 
-        # ---------------------------------------------------------
-        # MTTR PENDING
+
+    # =====================================================================
+    # MTTR PENDING
+    # date_pending - date_assigned
+    # =====================================================================
+
+    if "date_pending" in df_transformed.columns:
+
+        durasi_pending = (
+            df_transformed["date_pending"]
+            - df_transformed["date_assigned"]
+        ).dt.total_seconds() / 60
+
+        df_transformed["mttr_pending_minutes"] = (
+            durasi_pending.where(durasi_pending >= 0)
+        )
+
+
+        # =====================================================================
+        # MTTR FINAL PER TIKET
+        # =====================================================================
         #
-        # (last_update - assigned)
-        # -
-        # (last_update - pending)
+        # Kalau is_pending = True
+        #     -> gunakan mttr_pending_minutes
         #
-        # = pending - assigned
-        # ---------------------------------------------------------
+        # Kalau is_pending = False
+        #     -> gunakan mttr_non_pending_minutes
+        #
+        # =====================================================================
 
-        if 'date_pending' in df_transformed.columns:
-
-            durasi_total = (
-                df_transformed['date_last_update']
-                - df_transformed['date_assigned']
-            ).dt.total_seconds() / 60
-
-            durasi_pending = (
-                df_transformed['date_last_update']
-                - df_transformed['date_pending']
-            ).dt.total_seconds() / 60
-
-            mttr_pending = (
-                durasi_total - durasi_pending
-            )
-
-            df_transformed['mttr_pending_minutes'] = (
-                mttr_pending.where(mttr_pending >= 0)
-            )
-
-            # -----------------------------------------------------
-            # MTTR FINAL PER TIKET
-            # -----------------------------------------------------
-
-            has_pending = (
-                df_transformed['date_pending'].notna()
-            )
-
-            df_transformed['mttr_minutes'] = np.where(
-                has_pending,
-                df_transformed['mttr_pending_minutes'],
-                df_transformed['mttr_non_pending_minutes']
-            )
-
-        else:
-
-            df_transformed['mttr_minutes'] = (
-                df_transformed['mttr_non_pending_minutes']
-            )
-
-    # ---------------------------------------------------------
-    # Pastikan numeric
-    # ---------------------------------------------------------
+        df_transformed["mttr_minutes"] = np.where(
+            df_transformed["is_pending"],
+            df_transformed["mttr_pending_minutes"],
+            df_transformed["mttr_non_pending_minutes"]
+        )
 
     for col in [
-        'mttr_pending_minutes',
-        'mttr_non_pending_minutes',
-        'mttr_minutes'
+        "mttr_pending_minutes",
+        "mttr_non_pending_minutes",
+        "mttr_minutes"
     ]:
 
         df_transformed[col] = pd.to_numeric(
             df_transformed[col],
-            errors='coerce'
+            errors="coerce"
         )
 
         df_transformed[col] = df_transformed[col].where(
             df_transformed[col] >= 0
         )
-
+        
     # =========================================================================
     # 4. Hitung Response Time (Menit)
     # =========================================================================
