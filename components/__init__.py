@@ -10,3 +10,13 @@ from components.charts import (
     chart_layanan_treemap,
     render_problem_table,
 )
+
+from components.sidebar import render_sidebar
+
+from components.metrics import (
+    render_kpi_cards,
+    render_member_slicer,
+    calculate_mttr,
+)  
+
+from components.sidebar import render_sidebar
