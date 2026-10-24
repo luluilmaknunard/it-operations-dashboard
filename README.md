@@ -2,9 +2,6 @@
 
 Dashboard berbasis web interaktif yang dibangun menggunakan **Python** dan **Streamlit**. Aplikasi ini dirancang khusus untuk kebutuhan operasional internal perusahaan guna memantau, menganalisis, serta mengevaluasi kinerja Helpdesk IT secara transparan, akurat, dan *real-time*.
 
-> **🔒 Catatan Keamanan & Akses:** 
-> Aplikasi ini dikhususkan untuk penggunaan internal kantor. Bagi pengunjung luar yang mengakses tautan ini tanpa struktur dataset/database tiket resmi perusahaan, dashboard tidak akan menampilkan data atau visualisasi apa pun.
-
 ---
 
 ## 🔗 Live Demo
