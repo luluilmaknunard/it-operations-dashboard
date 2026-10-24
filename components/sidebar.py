@@ -133,7 +133,6 @@ def render_sidebar():
 
     # ============================================================
     # 4. AMBIL DATA DARI SESSION STATE & TAMPILKAN STATUS
-    #    (dipakai ulang di setiap halaman TANPA proses ulang)
     # ============================================================
     df_raw = st.session_state.get("df_raw", None)
 

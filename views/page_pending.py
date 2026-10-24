@@ -269,7 +269,6 @@ def _get_average_response(df):
     response_col = _find_column(
         df,
         [
-            # NAMA KOLOM ASLI DATA KAMU
             "response_time_minutes",
 
             # ALTERNATIF NAMA
@@ -428,7 +427,6 @@ def _chart_gangguan_kategori(df):
         "Jumlah",
     ]
 
-    # Samakan nama kategori untuk tampilan
     def normalize_category(value):
 
         value_lower = value.lower()

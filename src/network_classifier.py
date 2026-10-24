@@ -1,3 +1,23 @@
+"""
+Tujuan:
+    Modul Machine Learning ini didesain secara khusus untuk mengklasifikasikan 
+    akar penyebab (root cause) komponen jaringan IT berdasarkan deskripsi freetext.
+
+Input:
+    Data numerik dan teks keluhan pengguna dari atribut tiket (symptom, rootcause, dsb).
+
+Proses:
+    - Menyiapkan (aggregate) teks mentah menjadi serangkaian token valid.
+    - Menggunakan algoritma pemrosesan bahasa (NLP) dengan TF-IDF Vectorizer.
+    - Mengkombinasikan level Kata (Word) dan level Karakter (Char) menggunakan FeatureUnion.
+    - Melatih Model Regresi Logistik (Logistic Regression) dengan parameter pembobot yang seimbang.
+    - Serialisasi/Deserialisasi model lewat library Joblib (.pkl).
+
+Output:
+    Kolom baru "network_component" (hasil tebakan model) dan 
+    "network_confidence" (persentase/probabilitas akurasi tebakan tersebut).
+"""
+
 import os
 import joblib
 import pandas as pd
@@ -16,12 +36,13 @@ MODEL_PATH = "models/network_classifier.pkl"
 
 def prepare_network_text(df: pd.DataFrame) -> pd.Series:
     """
-    Menggabungkan beberapa kolom freetext tiket
-    menjadi satu teks untuk klasifikasi network component.
+    Tujuan: 
+        Menggabungkan beberapa kolom freetext tiket (seperti remark, summary, dan symptom)
+        menjadi satu teks utuh untuk inputan klasifikasi model.
     """
 
     text_cols = [
-        "ticket_rootcouse",
+        "ticket_rootcause",
         "remark",
         "ticket_summary",
         "ticket_symptom"
@@ -33,6 +54,7 @@ def prepare_network_text(df: pd.DataFrame) -> pd.Series:
     ]
 
     if not available_cols:
+        # Jika kolom acuan tidak ditemukan sama sekali, hasilkan blank series
         return pd.Series([""] * len(df), index=df.index)
 
     text = (
@@ -47,10 +69,6 @@ def prepare_network_text(df: pd.DataFrame) -> pd.Series:
     return text
 
 
-# ============================================================
-# MEMBUAT MODEL
-# ============================================================
-
 def create_network_model():
     """
     Membuat model klasifikasi Network Component.
@@ -59,6 +77,11 @@ def create_network_model():
     - Word TF-IDF
     - Character TF-IDF
     - Logistic Regression (Multi-class with balanced weights)
+
+    Tujuan: 
+        Membuat arsitektur klasifikasi teks hybrid. 
+        Menggabungkan representasi unigram/bigram kata dan character-level n-gram 
+        agar model tetap tangguh dalam menangani salah ketik (typo).
     """
 
     word_vectorizer = TfidfVectorizer(
@@ -77,11 +100,13 @@ def create_network_model():
         sublinear_tf=True
     )
 
+    # Menyatukan matriks dari vektor kata dan vektor karakter
     features = FeatureUnion([
         ("word", word_vectorizer),
         ("char", char_vectorizer)
     ])
 
+    # Mendeklarasikan pipeline pengklasifikasi
     model = Pipeline([
         ("features", features),
         (
@@ -96,16 +121,14 @@ def create_network_model():
     return model
 
 
-# ============================================================
-# TRAINING MODEL
-# ============================================================
-
 def train_network_classifier(
     df: pd.DataFrame,
     label_column="network_compo"
 ):
     """
-    Melatih model Network Component (LAN, Internet, VPN, dll).
+    Tujuan: 
+        Melatih (fit) model Network Component (seperti LAN, Internet, VPN) dengan 
+        data Excel berlabel manual, lalu menyimpannya dalam format .pkl lokal.
     """
 
     if df is None or df.empty:
@@ -116,22 +139,21 @@ def train_network_classifier(
             f"Kolom '{label_column}' tidak ditemukan."
         )
 
-    # Siapkan teks
+    # ekstraksi fitur dan label
     texts = prepare_network_text(df)
-
-    # Ambil label
     labels = (
         df[label_column]
         .astype(str)
         .str.strip()
     )
 
-    # Filter label yang valid (Abaikan NaN / Empty / Network Lainnya jika ada)
+    #  Membersihkan label invalid yang mungkin ter-record di Excel (seperti NaN / Empty)
     valid = (labels != "") & (labels.str.lower() != "nan") & (labels != "Network Lainnya")
 
     texts = texts[valid]
     labels = labels[valid]
 
+    # Guard clause minimum ketersediaan data latih
     if len(texts) < 10:
         raise ValueError(
             "Data training network terlalu sedikit. "
@@ -147,9 +169,8 @@ def train_network_classifier(
     print("\nDistribusi label Network Component:")
     print(labels.value_counts())
 
-    # Buat model
+    # Build and train model
     model = create_network_model()
-
     # Training
     model.fit(texts, labels)
 
@@ -159,7 +180,6 @@ def train_network_classifier(
         exist_ok=True
     )
 
-    # Simpan
     joblib.dump(
         model,
         MODEL_PATH
@@ -179,7 +199,8 @@ def train_network_classifier(
 
 def load_network_classifier():
     """
-    Memuat model Network Component yang sudah dilatih.
+    Tujuan: 
+    Memuat instance pipeline ML yang sebelumnya sudah dilatih (pre-trained).
     """
 
     if not os.path.exists(MODEL_PATH):
@@ -194,8 +215,9 @@ def load_network_classifier():
 
 def classify_network_component(df: pd.DataFrame):
     """
-    Mengklasifikasikan seluruh tiket ke dalam Network Component
-    menggunakan model lokal yang telah dilatih.
+    Tujuan: 
+        Memasukkan dataframe mentah ke dalam model untuk mendapatkan 
+        hasil tebakan komponen jaringan beserta confidence score-nya (0.0 - 1.0).
     """
 
     if df is None or df.empty:
@@ -212,12 +234,12 @@ def classify_network_component(df: pd.DataFrame):
 
     texts = prepare_network_text(df_result)
 
-    # Prediksi
+    # Inferensi label klasifikasi (contoh: 'VPN', 'LAN', dsb)
     predictions = model.predict(texts)
 
     df_result["network_component"] = predictions
 
-    # Confidence Score
+    # Menyimpan tingkat probabilitas agar bisa ditinjau ulang oleh tim data jika confidence rendah
     probabilities = model.predict_proba(texts)
 
     df_result["network_confidence"] = (

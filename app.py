@@ -1,3 +1,29 @@
+"""
+Tujuan:
+Menjadi titik masuk utama (entry point) untuk aplikasi Streamlit IT Operations Dashboard.
+File ini mengatur konfigurasi halaman, memuat CSS global, mengelola state, 
+serta merutekan pengguna ke halaman yang sesuai berdasarkan pilihan di sidebar.
+
+Input:
+Tidak ada input langsung secara programatik, namun file ini membaca state 
+dan merespons input dari komponen sidebar (termasuk unggahan file).
+
+Proses:
+    - Mengatur konfigurasi dasar halaman web (judul, ikon, layout).
+    - Menyuntikkan custom CSS untuk mempercantik tampilan antarmuka (kartu, sidebar).
+    - Memanggil komponen sidebar untuk merender menu dan proses upload data.
+    - Mengecek ketersediaan data mentah sebelum merender halaman.
+    - Melakukan routing ke halaman spesifik berdasarkan menu yang dipilih pengguna.
+
+Output:
+Tampilan antarmuka web interaktif Streamlit di browser pengguna.
+
+Catatan:
+Pastikan struktur folder views dan components sudah sesuai agar routing 
+halaman dapat berjalan dengan lancar tanpa error ModuleNotFoundError.
+"""
+
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -69,10 +95,14 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # 4. Inisialisasi Session State
+# Menyimpan raw data agar tidak hilang dan ter-reset saat halaman direfresh/berpindah
+
 if 'df_raw' not in st.session_state:
     st.session_state['df_raw'] = None
 
 # 5. Render Sidebar (Sekarang mengembalikan 2 variabel)
+# Memanggil sidebar untuk memuat menu navigasi dan proses upload data
+
 menu, df_raw = render_sidebar()
 
 # 6. Guard Clause
@@ -83,6 +113,23 @@ if df_raw is None:
 
 # 7. SAFE RENDERER HELPER
 def safe_render(module, df, page_name):
+    """
+    Tujuan:
+        Memastikan fungsi render dari modul view dapat dipanggil dengan aman tanpa crash.
+        
+    Input:
+        module (obj): Objek modul Python yang akan dipanggil.
+        df (pd.DataFrame): Dataframe mentah yang akan diproses di view.
+        page_name (str): Nama halaman untuk keperluan log/pesan error.
+        
+    Proses:
+        - Mengecek apakah modul memiliki fungsi `render()`.
+        - Jika tidak ada, fallback mengecek apakah modul memiliki fungsi `main()`.
+        - Jika keduanya tidak ada, munculkan pesan error di UI Streamlit.
+        
+    Output:
+        Render UI dari halaman terkait, atau tampilan pesan error.
+    """
     if hasattr(module, 'render'):
         module.render(df)
     elif hasattr(module, 'main'):
@@ -91,6 +138,7 @@ def safe_render(module, df, page_name):
         st.error(f"❌ Error: Fungsi `render(df_raw)` tidak ditemukan di file `views/{page_name}.py`!")
 
 # 8. Routing Halaman (Langsung kirim df_raw)
+# Mengarahkan dan merender pengguna ke komponen tampilan yang sesuai berdasarkan menu
 if menu == "Executive Overview":
     safe_render(page_overview, df_raw, "page_overview")
 elif menu == "Incident Analytics":

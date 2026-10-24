@@ -45,9 +45,6 @@ def render_top_filters(df, key_prefix="default"):
 
     # ============================================================
     # 1. KEY GLOBAL
-    #
-    # Jangan gunakan key_prefix untuk widget state.
-    # Semua halaman menggunakan state yang sama.
     # ============================================================
 
     month_key = "global_f_month"
@@ -249,9 +246,6 @@ def render_top_filters(df, key_prefix="default"):
 
     selected_month = st.session_state[month_key]
 
-    # Pastikan pilihan global tetap ada di options.
-    # Ini penting ketika pindah ke halaman yang subset datanya berbeda.
-
     if (
         selected_month != "All"
         and selected_month not in month_list
@@ -284,8 +278,6 @@ def render_top_filters(df, key_prefix="default"):
 
     # ============================================================
     # 10. UNIT NAME
-    #
-    # UNIT MENGIKUTI BULAN
     # ============================================================
 
     if unit_col is not None:
@@ -319,9 +311,6 @@ def render_top_filters(df, key_prefix="default"):
 
         unit_list = ["All"]
 
-    # Jangan hapus pilihan global hanya karena halaman
-    # tertentu tidak memiliki unit tersebut.
-
     selected_unit = st.session_state[unit_key]
 
     if (
@@ -337,10 +326,6 @@ def render_top_filters(df, key_prefix="default"):
             unit_list,
             key=unit_key
         )
-
-    # ============================================================
-    # 11. DATASET SETELAH UNIT
-    # ============================================================
 
     df_after_unit = df_after_month.copy()
 
@@ -358,9 +343,6 @@ def render_top_filters(df, key_prefix="default"):
 
     # ============================================================
     # 12. DEPARTMENT
-    #
-    # DEPARTMENT MENGIKUTI:
-    # BULAN + UNIT
     # ============================================================
 
     if dept_col is not None:
@@ -394,8 +376,6 @@ def render_top_filters(df, key_prefix="default"):
 
         department_list = ["All"]
 
-    # Pertahankan pilihan department global
-
     selected_dept = st.session_state[dept_key]
 
     if (
@@ -411,10 +391,6 @@ def render_top_filters(df, key_prefix="default"):
             department_list,
             key=dept_key
         )
-
-    # ============================================================
-    # 13. DATASET SETELAH DEPARTMENT
-    # ============================================================
 
     df_after_dept = df_after_unit.copy()
 
@@ -432,9 +408,6 @@ def render_top_filters(df, key_prefix="default"):
 
     # ============================================================
     # 14. SERVICE / NAMA LAYANAN
-    #
-    # SERVICE MENGIKUTI:
-    # BULAN + UNIT + DEPARTMENT
     # ============================================================
 
     if service_col is not None:
@@ -468,7 +441,6 @@ def render_top_filters(df, key_prefix="default"):
 
         service_list = ["All"]
 
-    # Pertahankan pilihan service global
 
     selected_service = st.session_state[service_key]
 
@@ -575,10 +547,6 @@ def render_top_filters(df, key_prefix="default"):
         selected_service != "All"
     )
 
-    # ============================================================
-    # 17. HAPUS KOLOM BANTU
-    # ============================================================
-
     cols_to_drop = [
         "datetime_filter",
         "sort_key",
@@ -620,4 +588,3 @@ def render_top_filters(df, key_prefix="default"):
     )
 
     return filtered_df
-

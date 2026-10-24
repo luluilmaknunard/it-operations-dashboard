@@ -1,26 +1,59 @@
+"""
+Tujuan:
+    Modul ini bertanggung jawab atas tahapan transformasi data tingkat lanjut (Feature Engineering).
+    Fungsi utamanya meliputi pemisahan kategori bertingkat, perhitungan KPI krusial 
+    (MTTR, Response Time, SLA Status), serta penautan ke model klasifikasi Machine Learning.
+
+Input:
+    DataFrame Pandas (df) hasil pembersihan tahap awal dari modul data_cleaning.
+
+Proses:
+    - Memendekkan nama staf/pengguna untuk kemudahan dan kerapian visualisasi.
+    - Memecah (split) teks pada kolom kategori menjadi beberapa level turunan (split_cats).
+    - Mengonversi tipe data string ke tipe datetime dengan dayfirst=True (DD.MM.YYYY).
+    - Menghitung durasi MTTR (Mean Time to Repair) dengan mengkompensasi waktu Pending.
+    - Menghitung waktu respons awal agen/teknisi (Response Time).
+    - Menentukan status pencapaian Service Level Agreement (Comply vs Breach).
+
+Output:
+    DataFrame Pandas komprehensif yang telah diperkaya dengan berbagai metrik
+    kinerja (KPI)
+"""
+
+
 import os
 import sys
 import pandas as pd
 import numpy as np
 
+# Mengimpor modul klasifikasi lokal untuk mengelompokkan jenis tiket dan komponen network secara otomatis
 from src.ticket_classifier import classify_tickets
 from src.network_classifier import classify_network_component
 
 
 def transform_data_and_kpi(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Melakukan transformasi data, pemisahan kategori bertingkat, 
-    perhitungan KPI, serta Klasifikasi ML (Network Component & Ticket Type).
+    Tujuan: 
+        Melakukan transformasi struktural dataset tiket dan kalkulasi KPI tingkat lanjut.
+    
+    Input:
+        df (pd.DataFrame): Dataframe mentah yang akan ditransformasi.
+        
+    Output:
+        pd.DataFrame: Dataframe dengan kolom KPI dan hasil ML tambahan.
     """
+
     if df is None or df.empty:
         return df
 
     df_transformed = df.copy()
 
+
     # =========================================================================
     # TRANSFORMASI NAMA: Mengambil 2 Kata Pertama (created_by_name & updated_by_name)
     # =========================================================================
     def shorten_to_two_words(name):
+        """Helper memotong nama, dengan filter khusus untuk nama 'Muhammad'."""
         if pd.isna(name) or not str(name).strip():
             return name
         
@@ -29,6 +62,7 @@ def transform_data_and_kpi(df: pd.DataFrame) -> pd.DataFrame:
             return name
 
         kata_pertama = words[0]
+        # Mengambil kata kedua jika nama depan adalah "muhammad" untuk menghindari duplikasi umum
 
         if kata_pertama.lower() == "muhammad":
             display_name = words[1] if len(words) > 1 else kata_pertama
@@ -42,16 +76,17 @@ def transform_data_and_kpi(df: pd.DataFrame) -> pd.DataFrame:
             df_transformed[name_col] = df_transformed[name_col].apply(shorten_to_two_words)
 
     # =========================================================================
-    # 1. Pemisahan Category Name Bertingkat
+    # 1. PEMISAHAN KATEGORI BERTINGKAH (Split Category_Name)
     # =========================================================================
-    # Pemisahan Category Name yang lebih aman (menangani '-' dengan atau tanpa spasi)
     if 'category_name' in df_transformed.columns:
-            # Regex split fleksibel untuk strip (-), pipe (|), atau (>)
+            # Regex split fleksibel untuk menampung format strip (-), pipe (|), atau panah (>)
             split_cats = df_transformed['category_name'].astype(str).str.split(r'\s*(?:-|\||>)\s*', expand=True)
             
             for i in range(split_cats.shape[1]):
                 col_name = f'category_split_{i+1}'
                 df_transformed[col_name] = split_cats[i].str.strip()
+
+                 # Membersihkan sisa string kosong atau null text
                 df_transformed[col_name] = df_transformed[col_name].replace(['nan', 'None', '', 'null'], None)
 
 
@@ -62,9 +97,7 @@ def transform_data_and_kpi(df: pd.DataFrame) -> pd.DataFrame:
     # DD.MM.YYYY HH:MM:SS
     #
     # Contoh:
-    # 01.04.2026 5:23:37
-    # = 1 April 2026 pukul 05:23:37
-    #
+    # 01.04.2026 5:23:37 = 1 April 2026 pukul 05:23:37
     # dayfirst=True wajib supaya 01.04.2026 tidak dibaca sebagai 4 Januari 2026.
 
     time_columns = [
@@ -100,13 +133,12 @@ def transform_data_and_kpi(df: pd.DataFrame) -> pd.DataFrame:
     #
     # =========================================================================
 
+    # Kalkulasi ini sensitif terhadap status Pending (menunggu pihak ketiga/user)
     df_transformed["mttr_non_pending_minutes"] = np.nan
     df_transformed["mttr_pending_minutes"] = np.nan
     df_transformed["mttr_minutes"] = np.nan
 
-    # -------------------------------------------------------------------------
-    # Tentukan status Pending berdasarkan date_pending
-    # -------------------------------------------------------------------------
+    # Flag penanda apakah tiket memiliki waktu tunda (Pending)
     if "date_pending" in df_transformed.columns:
 
         # Pastikan date_pending sudah benar-benar datetime
@@ -132,11 +164,6 @@ def transform_data_and_kpi(df: pd.DataFrame) -> pd.DataFrame:
     }
 
     if required_mttr_cols.issubset(df_transformed.columns):
-
-        # =====================================================================
-        # MTTR NON-PENDING
-        # date_last_update - date_assigned
-        # =====================================================================
 
         durasi_non_pending = (
             df_transformed["date_last_update"]
@@ -199,7 +226,7 @@ def transform_data_and_kpi(df: pd.DataFrame) -> pd.DataFrame:
         )
         
     # =========================================================================
-    # 4. Hitung Response Time (Menit)
+    # 4. HITUNG RESPONSE TIME (Menit)
     # =========================================================================
     if 'date_assigned' in df_transformed.columns and 'date_start_interaction' in df_transformed.columns:
         df_transformed['response_time_minutes'] = (
@@ -209,7 +236,7 @@ def transform_data_and_kpi(df: pd.DataFrame) -> pd.DataFrame:
          df_transformed['response_time_minutes'] = 0.0
 
     # =========================================================================
-    # 5. Hitung SLA Status (Comply vs Breach)
+    # 5. HITUNG SLA STATUS (Comply vs Breach)
     # =========================================================================
     if 'sla_second' in df_transformed.columns:
         df_transformed['sla_minute'] = df_transformed['sla_second'] / 60
@@ -221,7 +248,7 @@ def transform_data_and_kpi(df: pd.DataFrame) -> pd.DataFrame:
         df_transformed['sla_status'] = 'UNDETERMINED'
 
     # =========================================================================
-    # 6. Resolution Time Grouping
+    # 6. RESOLUTION TIME GROUPING (Distribusi)
     # =========================================================================
     if 'date_created_at' in df_transformed.columns and 'date_last_update' in df_transformed.columns:
         df_transformed['resolution_time_minutes'] = (
@@ -229,6 +256,7 @@ def transform_data_and_kpi(df: pd.DataFrame) -> pd.DataFrame:
         ).clip(lower=0)
         
         def group_resolution_time(minutes):
+            """Memetakan durasi menit ke dalam rentang bucket kategorial untuk visualisasi."""
             if pd.isna(minutes):
                 return "> 240 Menit"
             elif minutes <= 30:
@@ -257,7 +285,12 @@ def transform_data_and_kpi(df: pd.DataFrame) -> pd.DataFrame:
     return df_transformed
 
 
+# ==========================================
+# FUNGSI HELPER TAMBAHAN (Utility)
+# ==========================================
+
 def get_nama_display_dax(name):
+    """Fallback DAX utility format name."""
     if pd.isna(name) or not str(name).strip():
         return name
     words = str(name).strip().split()
@@ -275,6 +308,7 @@ def get_nama_display_dax(name):
 
 
 def transform_category_name(df: pd.DataFrame) -> pd.DataFrame:
+    """Fallback utility untuk memisahkan nama kategori (khusus dengan delimitator '-')."""
     if df is None or df.empty or 'category_name' not in df.columns:
         return df
 

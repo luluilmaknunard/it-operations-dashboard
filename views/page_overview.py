@@ -1,3 +1,24 @@
+"""
+Tujuan:
+    Modul antarmuka untuk merender halaman 'Executive Overview'.
+    Berfungsi sebagai ringkasan tingkat tinggi (high-level summary) kinerja IT,
+    menampilkan distribusi jenis tiket, tren harian, kategori masalah utama,
+    dampak, dan departemen/layanan penyumbang tiket terbesar.
+
+Input:
+    df_raw (pd.DataFrame): Dataframe yang berisi seluruh tiket yang telah diproses.
+
+Proses:
+    - Merender filter teratas (render_top_filters).
+    - Memanggil metrik KPI utama (render_kpi_cards).
+    - Membangun chart visual menggunakan library plotly (Donut Chart, Line Chart, 
+      Horizontal Bar Chart, Pie Chart, dan Treemap).
+    - Menerapkan pewarnaan kustom yang konsisten sesuai standar desain.
+
+Output:
+    Dashboard ringkasan eksekutif pada antarmuka Streamlit.
+"""
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -14,6 +35,7 @@ from components.metrics import render_kpi_cards
 
 def _find_column(df, candidates):
     """
+    Tujuan: Mengambil nama kolom pertama yang tersedia dari list kandidat.
     Mengambil nama kolom pertama yang tersedia.
     """
 
@@ -32,42 +54,32 @@ def _find_column(df, candidates):
 # ============================================================
 
 def render(df_raw):
+    """
+    Tujuan: Merender seluruh komponen visual untuk halaman Executive Overview.
+    """
 
-    # ========================================================
     # 0. VALIDASI DATA RAW
-    # ========================================================
-
     if df_raw is None or df_raw.empty:
 
         st.warning(
             "Data raw tidak tersedia. "
             "Silakan upload file terlebih dahulu."
         )
-
         return
 
-    # ========================================================
     # 1. HEADER
     # DESAIN DISESUAIKAN DENGAN INCIDENT ANALYTICS
-    # ========================================================
-
     st.markdown(
         "## **📊 Executive Overview**"
     )
 
-    # ========================================================
     # 2. TOP FILTER
-    # ========================================================
-
     df_filtered = render_top_filters(
         df_raw,
         key_prefix="overview",
     )
 
-    # ========================================================
     # 3. VALIDASI HASIL FILTER
-    # ========================================================
-
     if df_filtered is None or df_filtered.empty:
 
         st.warning(
@@ -76,9 +88,7 @@ def render(df_raw):
 
         return
 
-    # ========================================================
     # 4. CARI KOLOM UTAMA
-    # ========================================================
 
     type_col = _find_column(
         df_filtered,
@@ -101,57 +111,37 @@ def render(df_raw):
         ]
     )
 
-    # ========================================================
     # 5. SPACING
-    # ========================================================
-
     st.markdown(
         "<br>",
         unsafe_allow_html=True
     )
 
-    # ========================================================
-    # 6. SIX SCORECARDS METRICS
-    #
+   # 6. SIX SCORECARDS METRICS
     # KPI menggunakan df_filtered sehingga:
-    #
-    # All Unit
-    # -> KPI seluruh data
-    #
-    # Unit tertentu
-    # -> KPI mengikuti unit tersebut
-    #
+    # All Unit -> KPI seluruh data
+    # Unit tertentu -> KPI mengikuti unit tersebut
     # Logika MTTR berada di components/metrics.py
-    # ========================================================
-
     render_kpi_cards(
         df_filtered
     )
 
-    # ========================================================
     # 7. SPACING
-    # ========================================================
-
     st.markdown(
         "<br>",
         unsafe_allow_html=True
     )
 
-    # ========================================================
-    # 8. BARIS 2
-    # 4 VISUALISASI
-    # ========================================================
-
+    # =========================== 
+    # 8. BARIS 2: 4 VISUALISASI
+    # =========================== 
     c1, c2, c3, c4 = st.columns(
         [1, 1.3, 1.2, 1],
         gap="small"
     )
 
-    # ========================================================
     # 8.1 DONUT
     # DISTRIBUSI JENIS TIKET
-    # ========================================================
-
     with c1:
 
         st.markdown(
@@ -233,11 +223,7 @@ def render(df_raw):
                 "Kolom ticket_type/type tidak ditemukan."
             )
 
-    # ========================================================
-    # 8.2 LINE CHART
-    # TREN JUMLAH TIKET HARIAN
-    # ========================================================
-
+    # 8.2 LINE CHART: TREN JUMLAH TIKET HARIAN
     with c2:
 
         st.markdown(
@@ -398,11 +384,7 @@ def render(df_raw):
                 "Data tanggal/tipe tidak lengkap."
             )
 
-    # ========================================================
-    # 8.3 BAR CHART
-    # JUMLAH GANGGUAN PER KATEGORI
-    # ========================================================
-
+    # 8.3 BAR CHART: JUMLAH GANGGUAN PER KATEGORI
     with c3:
 
         st.markdown(
@@ -499,11 +481,8 @@ def render(df_raw):
                 "Kolom kategori tidak ditemukan."
             )
 
-    # ========================================================
-    # 8.4 PIE CHART
-    # DISTRIBUSI TINGKAT DAMPAK
-    # ========================================================
-
+   
+    # 8.4 PIE CHART: DISTRIBUSI TINGKAT DAMPAK
     with c4:
 
         st.markdown(
@@ -593,29 +572,21 @@ def render(df_raw):
                 "Kolom impact tidak ditemukan."
             )
 
-    # ========================================================
-    # 9. SPACING
-    # ========================================================
-
     st.markdown(
         "<br>",
         unsafe_allow_html=True
     )
 
     # ========================================================
-    # 10. BARIS 3
-    # DEPARTMENT + TREEMAP
-    # ========================================================
+    # 10. BARIS 3: DEPARTMENT + TREEMAP
+
 
     d1, d2 = st.columns(
         [1.2, 1.8],
         gap="small"
     )
 
-    # ========================================================
     # 10.1 DEPARTMENT DENGAN GANGGUAN TERBANYAK
-    # ========================================================
-
     with d1:
 
         st.markdown(
@@ -627,11 +598,7 @@ def render(df_raw):
             key_prefix="overview"
         )
 
-    # ========================================================
-    # 10.2 TREEMAP
-    # LAYANAN DENGAN LAPORAN GANGGUAN TERBANYAK
-    # ========================================================
-
+    # 10.2 TREEMAP: LAYANAN DENGAN LAPORAN GANGGUAN TERBANYAK
     with d2:
 
         st.markdown(

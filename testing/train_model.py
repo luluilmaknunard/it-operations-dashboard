@@ -49,7 +49,6 @@ print("\n" + "-" * 40)
 print("B. TRAINING MODEL NETWORK COMPONENT")
 print("-" * 40)
 
-# Sesuaikan 'network_compo' dengan nama kolom label network di Excel kamu
 NETWORK_LABEL_COL = "network_compo" if "network_compo" in df.columns else "cat_network"
 
 if NETWORK_LABEL_COL not in df.columns:

@@ -97,7 +97,6 @@ for i in range(1, TOTAL_ROWS + 1):
         minutes=random.randint(5, 30)
     )
 
-    # 30% Kemungkinan Pending
     is_pending = random.random() < 0.3
     if is_pending:
         date_pending = date_assigned + timedelta(
@@ -114,7 +113,7 @@ for i in range(1, TOTAL_ROWS + 1):
 
     date_open = date_created
 
-    # Nama dibuat bervariasi (panjang 3-4 kata & pendek 1-2 kata untuk tes pemotongan nama)
+
     created_by = (
         fake.name()
         if i % 2 == 0

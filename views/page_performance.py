@@ -1,3 +1,26 @@
+"""
+Tujuan:
+    Modul antarmuka untuk merender halaman 'IT Performance & SLA'.
+    Halaman ini khusus membedah metrik produktivitas staf IT / teknisi (agent),
+    termasuk peringkat penyelesaian, SLA compliance, MTTR harian, serta 
+    menampilkan distribusi durasi penyelesaian tiket.
+
+Input:
+    df_raw (pd.DataFrame): Dataframe mentah yang berisi seluruh tiket.
+
+Proses:
+    - Melakukan guard clause (filtering mutlak) untuk memastikan hanya tiket
+      jenis "Gangguan / Incident" yang diperhitungkan ke dalam kinerja teknisi.
+    - Membuat elemen dropdown "Slicer" anggota untuk memfilter performa per agen.
+    - Merender HTML/CSS khusus secara dinamis untuk scorecard KPI di sebelah kanan.
+    - Memetakan hasil kalkulasi MTTR, Pencapaian SLA (%), dan Response Time
+      ke dalam blok visualisasi.
+    - Memanggil grafik Bar peringkat penyelesaian tertinggi dan distribusi waktu.
+
+Output:
+    Dashboard metrik Performa dan SLA IT di antarmuka Streamlit.
+"""
+
 import streamlit as st
 import pandas as pd
 
@@ -21,7 +44,8 @@ from components.charts import (
 
 def _first_existing_column(df, candidates):
     """
-    Mengambil nama kolom pertama yang tersedia.
+    Tujuan: Mengambil nama kolom pertama yang tersedia di dataframe dari 
+    daftar kandidat kolom (fallback mekanik).
     """
     if df is None or df.empty:
         return None
@@ -34,9 +58,8 @@ def _first_existing_column(df, candidates):
 
 
 def _numeric_mean(df, column):
-    """
-    Mengambil rata-rata dari kolom numerik.
-    """
+    """Tujuan: Menghitung rata-rata (mean) secara aman khusus untuk kolom numerik, 
+    mengabaikan NaN dan nilai negatif."""
     if column is None or column not in df.columns:
         return None
 
@@ -58,8 +81,9 @@ def _numeric_mean(df, column):
 
 def _numeric_sum(df, column):
     """
-    Menjumlahkan kolom numerik / flag.
-    Mendukung nilai 0/1, True/False, dan angka.
+    Tujuan: Menjumlahkan isi sebuah kolom yang bertindak sebagai flag (penanda).
+    Fungsi ini sangat adaptif: mendukung nilai 0/1, boolean (True/False), 
+    hingga string text ("yes", "y", "breach").
     """
     if column is None or column not in df.columns:
         return 0
@@ -102,9 +126,7 @@ def _numeric_sum(df, column):
 
 
 def _count_unique(df, column):
-    """
-    Menghitung jumlah ticket unik.
-    """
+    """Tujuan: Menghitung secara distinct/unik dari sebuah ID."""
     if df is None or df.empty:
         return 0
 
@@ -130,15 +152,14 @@ def render_kpi_card(
     icon=None
 ):
     """
-    Render KPI menggunakan st.html()
-    supaya HTML tidak terbaca sebagai code block.
+    Tujuan: 
+        Membangun dan merender komponen UI kotak KPI (scorecard) secara manual.
+        Menggunakan st.html() supaya tag HTML asli dirender oleh browser dan 
+        bukan ditafsirkan sebagai markdown code block oleh Streamlit.
     """
-
     display_label = str(label)
-
     if icon:
         display_label = f"{display_label} {icon}"
-
     display_value = str(value)
 
     if suffix:
@@ -159,6 +180,7 @@ def render_kpi_card(
 # ============================================================
 
 def render_kpi_css():
+    """Tujuan: Menyuntikkan style (CSS) khusus untuk kotak KPI di halaman ini."""
 
     st.html(
         """
@@ -210,10 +232,7 @@ def render_kpi_css():
 
 def render(df_raw):
 
-    # ========================================================
     # 0. VALIDASI DATA
-    # ========================================================
-
     if df_raw is None or df_raw.empty:
 
         st.warning(
@@ -223,11 +242,9 @@ def render(df_raw):
 
         return
 
-    # ========================================================
-    # 1. FILTER MUTLAK
-    # PERFORMANCE HANYA UNTUK GANGGUAN / INCIDENT
-    # ========================================================
-
+    
+    # 1. FILTER MUTLAK (HANYA GANGGUAN/INCIDENT)
+    # Penilaian performance hanya diperhitungkan untuk pemecahan masalah gangguan teknis
     ticket_col = _first_existing_column(
         df_raw,
         [
@@ -263,18 +280,12 @@ def render(df_raw):
 
         return
 
-    # ========================================================
     # 2. HEADER
-    # ========================================================
-
     st.markdown(
         "## ⚡ IT Performance & SLA"
     )
 
-    # ========================================================
-    # 3. FILTER ATAS
-    # ========================================================
-
+    # 3. FILTER ATAS (Global Top Filters)
     df_filtered = render_top_filters(
         df_performance,
         key_prefix="perf"
@@ -288,10 +299,7 @@ def render(df_raw):
 
         return
 
-    # ========================================================
-    # 4. SLICER ANGGOTA
-    # ========================================================
-
+    # 4. SLICER ANGGOTA (Dinamis dropdown list Teknisi)
     member_col = find_column(
         df_filtered,
         [
@@ -355,6 +363,7 @@ def render(df_raw):
             key="performance_member"
         )
 
+        # Apply slicer filter ke dataframe berjalan
         if selected_member != "All":
 
             df_filtered = df_filtered[
@@ -372,10 +381,7 @@ def render(df_raw):
 
         return
 
-    # ========================================================
-    # 5. LAYOUT UTAMA
-    # ========================================================
-
+    # 5. LAYOUT UTAMA KIRI (Chart) & KANAN (KPI Panel)
     middle, right = st.columns(
         [4.5, 1.5],
         gap="small"
@@ -387,19 +393,13 @@ def render(df_raw):
 
     with middle:
 
-        # ====================================================
         # BARIS ATAS
-        # ====================================================
-
         top1, top2, top3 = st.columns(
             [1.25, 1, 1],
             gap="small"
         )
 
-        # ====================================================
-        # 6.1 PERINGKAT PENYELESAIAN
-        # ====================================================
-
+        # 6.1 PERINGKAT PENYELESAIAN (Bar Chart)
         with top1:
 
             fig_rank = chart_peringkat_penyelesaian(
@@ -437,10 +437,7 @@ def render(df_raw):
                     "Data peringkat penyelesaian tidak tersedia."
                 )
 
-        # ====================================================
         # 6.2 TINGKAT DAMPAK - BAR
-        # ====================================================
-
         with top2:
 
             fig_impact = chart_tingkat_dampak_bar(
@@ -478,10 +475,7 @@ def render(df_raw):
                     "Data tingkat dampak tidak tersedia."
                 )
 
-        # ====================================================
-        # 6.3 TOP 3 MEMBER PENDING
-        # ====================================================
-
+        #  6.3 TOP 3 MEMBER PENDING (Bar)
         with top3:
 
             fig_pending = chart_pending_member(
@@ -519,10 +513,8 @@ def render(df_raw):
                     "Data pending tidak tersedia."
                 )
 
-        # ====================================================
-        # 6.4 DISTRIBUSI WAKTU PENYELESAIAN
-        # ====================================================
-
+        
+        # 6.4 DISTRIBUSI WAKTU PENYELESAIAN (Bar)
         st.markdown(
             "<br>",
             unsafe_allow_html=True
@@ -563,10 +555,7 @@ def render(df_raw):
                 "Data waktu penyelesaian tidak tersedia."
             )
 
-        # ====================================================
-        # 6.5 DESKRIPSI PERMASALAHAN
-        # ====================================================
-
+        # 6.5 DESKRIPSI PERMASALAHAN (Tabel Top 10)
         st.markdown(
             "<br>",
             unsafe_allow_html=True
@@ -582,16 +571,10 @@ def render(df_raw):
 
     with right:
 
-        # ====================================================
-        # CSS
-        # ====================================================
-
+       #injeksi CSS khusus untuk KPI card
         render_kpi_css()
 
-        # ====================================================
-        # CARI ID TICKET
-        # ====================================================
-
+        # Identifikasi ID Tiket
         id_col = _first_existing_column(
             df_filtered,
             [
@@ -602,10 +585,7 @@ def render(df_raw):
             ]
         )
 
-        # ====================================================
-        # 1. TOTAL GANGGUAN
-        # ====================================================
-
+        # 7.1 TOTAL GANGGUAN
         total_gangguan = _count_unique(
             df_filtered,
             id_col
@@ -616,10 +596,7 @@ def render(df_raw):
             f"{total_gangguan:,}"
         )
 
-        # ====================================================
-        # 2. RATA-RATA MTTR
-        # ====================================================
-
+        # 7.2 RATA-RATA MTTR
         mttr_col = _first_existing_column(
             df_filtered,
             [
@@ -646,10 +623,7 @@ def render(df_raw):
             icon="⭐"
         )
 
-        # ====================================================
-        # 3. TIKET PENDING
-        # ====================================================
-
+        # 7.3 TIKET PENDING
         pending_count_col = _first_existing_column(
             df_filtered,
             [
@@ -732,10 +706,7 @@ def render(df_raw):
             f"{pending:,}"
         )
 
-        # ====================================================
-        # 4. PENCAPAIAN SLA
-        # ====================================================
-
+        # 7.4 PENCAPAIAN SLA (%)
         sla = get_sla_achievement(
             df_filtered
         )
@@ -750,10 +721,8 @@ def render(df_raw):
             icon="⭐"
         )
 
-        # ====================================================
-        # 5. TIKET DI LUAR SLA
-        # ====================================================
-
+       
+        # 7.5 TIKET DI LUAR SLA
         breach_col = _first_existing_column(
             df_filtered,
             [
@@ -815,10 +784,8 @@ def render(df_raw):
             f"{luar_sla:,}"
         )
 
-        # ====================================================
-        # 6. RATA-RATA WAKTU RESPON
-        # ====================================================
 
+        # 7.6 RATA-RATA WAKTU RESPON
         response_col = _first_existing_column(
             df_filtered,
             [
